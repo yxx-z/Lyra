@@ -2,10 +2,13 @@ services:
   lyra:
     image: lyra:latest
     build: .
+    working_dir: /app
+    command: ["lyra", "--config", "/app/config.yaml"]
     ports:
       - "4533:4533"
     volumes:
-      - /your/music:/music:ro
+      - ./config.yaml:/app/config.yaml:ro
+      - /home/yxx/music:/music:ro
       - ./data:/app/data
     environment:
       - LIBRARY_PATHS=/music
