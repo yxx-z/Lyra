@@ -1,61 +1,61 @@
-# Lyra — Project Initialization Implementation Plan
+# Lyra — 项目初始化实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **给 AI 工作者：** 必须使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务执行本计划。步骤使用复选框（`- [ ]`）语法追踪进度。
 
-**Goal:** Scaffold the Lyra music server — Go module, config system, SQLite DB layer, Chi HTTP server with `/health`, embedded Vue 3 frontend, Dockerfile, and Makefile — producing a single binary that starts and serves.
+**目标：** 搭建 Lyra 音乐服务器骨架 —— Go 模块、配置系统、SQLite 数据库层、带 `/health` 端点的 Chi HTTP 服务器、嵌入式 Vue 3 前端、Dockerfile 和 Makefile —— 最终产出一个能启动并提供服务的单一二进制文件。
 
-**Architecture:** Single Go binary serves an embedded Vue 3 frontend (built by Vite, output to `ui/dist/`, embedded via `//go:embed`). Backend uses Chi for routing, `modernc.org/sqlite` for a pure-Go SQLite driver (no CGo), and a hand-rolled migration runner reading SQL files from an embedded FS. Frontend source lives in `web/`, its build output lands in `ui/dist/` which is a separate Go package (`package ui`) responsible only for the embed.
+**架构：** 单个 Go 二进制文件内嵌 Vue 3 前端（由 Vite 构建，输出到 `ui/dist/`，通过 `//go:embed` 嵌入）。后端使用 Chi 路由，`modernc.org/sqlite` 作为纯 Go SQLite 驱动（无 CGo），通过手写迁移器从嵌入式 FS 读取 SQL 文件执行迁移。前端源码放在 `web/`，构建输出落到 `ui/dist/`，该目录是独立的 Go 包（`package ui`），仅负责 embed。
 
-**Tech Stack:** Go 1.22+, Chi v5, modernc.org/sqlite, gopkg.in/yaml.v3, Vue 3 + TypeScript + Vite + Naive UI + Pinia, Docker
+**技术栈：** Go 1.22+、Chi v5、modernc.org/sqlite、gopkg.in/yaml.v3、Vue 3 + TypeScript + Vite + Naive UI + Pinia、Docker
 
 ---
 
-## Prerequisites
+## 前置条件
 
-Before starting any task, ensure the following are installed:
+开始任何任务前，确保以下工具已安装：
 
 ```bash
-# Install Go 1.22+ (WSL2/Ubuntu)
+# 安装 Go 1.22+（WSL2/Ubuntu）
 wget https://go.dev/dl/go1.22.4.linux-amd64.tar.gz
 sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.22.4.linux-amd64.tar.gz
 echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
 source ~/.bashrc
-go version  # should print go1.22.x
+go version  # 应输出 go1.22.x
 
-# Node is already installed (v24)
+# Node 已安装（v24）
 node --version
 npm --version
 
-# Docker (for Task 7)
+# Docker（任务 7 需要）
 docker --version
 ```
 
 ---
 
-## File Map
+## 文件结构
 
 ```
 lyra/
 ├── cmd/server/
-│   └── main.go                     # entry point, wires config + db + router
+│   └── main.go                     # 入口，组装 config + db + router
 ├── internal/
 │   ├── api/
-│   │   ├── router.go               # Chi router, /health endpoint
+│   │   ├── router.go               # Chi 路由，/health 端点
 │   │   └── router_test.go
 │   ├── config/
-│   │   ├── config.go               # Config struct + Load() + Default()
+│   │   ├── config.go               # Config 结构体 + Load() + Default()
 │   │   └── config_test.go
 │   └── db/
-│       ├── db.go                   # Open(), WAL mode, migration runner
+│       ├── db.go                   # Open()、WAL 模式、迁移运行器
 │       ├── db_test.go
-│       ├── schema.sql              # reference schema (not embedded)
+│       ├── schema.sql              # 参考 schema（不编译进二进制）
 │       └── migrations/
-│           └── 001_init.up.sql     # first migration
+│           └── 001_init.up.sql     # 第一个迁移文件
 ├── ui/
-│   ├── ui.go                       # package ui; //go:embed all:dist
-│   └── dist/                       # Vite output (gitignored, .gitkeep present)
+│   ├── ui.go                       # package ui；//go:embed all:dist
+│   └── dist/                       # Vite 构建输出（已 gitignore，保留 .gitkeep）
 │       └── .gitkeep
-├── web/                            # Vue 3 source
+├── web/                            # Vue 3 源码
 │   ├── src/
 │   │   ├── App.vue
 │   │   └── main.ts
@@ -71,30 +71,30 @@ lyra/
 
 ---
 
-## Task 1: Environment + Go module + directory skeleton
+## 任务 1：环境 + Go 模块 + 目录骨架
 
-**Files:**
-- Create: `go.mod`
-- Create: all `internal/`, `ui/`, `web/src/` directories
+**涉及文件：**
+- 创建：`go.mod`
+- 创建：所有 `internal/`、`ui/`、`web/src/` 目录
 
-- [ ] **Step 1: Verify Go is installed**
+- [ ] **步骤 1：验证 Go 已安装**
 
 ```bash
 go version
 ```
 
-Expected: `go version go1.22.x linux/amd64`
+预期输出：`go version go1.22.x linux/amd64`
 
-- [ ] **Step 2: Initialize Go module**
+- [ ] **步骤 2：初始化 Go 模块**
 
 ```bash
 cd /home/yxx/develop/Lyra
 go mod init github.com/yxx-z/lyra
 ```
 
-Expected: `go.mod` created containing `module github.com/yxx-z/lyra` and `go 1.22`
+预期：在当前目录创建 `go.mod`，内容含 `module github.com/yxx-z/lyra` 和 `go 1.22`
 
-- [ ] **Step 3: Create all directories**
+- [ ] **步骤 3：创建所有目录**
 
 ```bash
 mkdir -p \
@@ -115,7 +115,7 @@ mkdir -p \
   data
 ```
 
-- [ ] **Step 4: Create stub main.go**
+- [ ] **步骤 4：创建占位 main.go**
 
 ```go
 // cmd/server/main.go
@@ -124,29 +124,29 @@ package main
 func main() {}
 ```
 
-- [ ] **Step 5: Add .gitkeep for ui/dist so the directory is tracked before the build**
+- [ ] **步骤 5：为 ui/dist 添加 .gitkeep（确保目录在构建前就被 git 追踪）**
 
 ```bash
 touch ui/dist/.gitkeep
 ```
 
-- [ ] **Step 6: Commit**
+- [ ] **步骤 6：提交**
 
 ```bash
 git add go.mod cmd/ internal/ ui/ web/ data/
-git commit -m "chore: init Go module and directory skeleton"
+git commit -m "chore: 初始化 Go 模块和目录骨架"
 ```
 
 ---
 
-## Task 2: Configuration system
+## 任务 2：配置系统
 
-**Files:**
-- Create: `internal/config/config.go`
-- Create: `internal/config/config_test.go`
-- Create: `config.example.yaml`
+**涉及文件：**
+- 创建：`internal/config/config.go`
+- 创建：`internal/config/config_test.go`
+- 创建：`config.example.yaml`
 
-- [ ] **Step 1: Write the failing tests**
+- [ ] **步骤 1：写失败测试**
 
 ```go
 // internal/config/config_test.go
@@ -160,23 +160,23 @@ import (
 func TestDefault_Defaults(t *testing.T) {
 	cfg := Default()
 	if cfg.Server.Port != 4533 {
-		t.Errorf("want port 4533, got %d", cfg.Server.Port)
+		t.Errorf("期望端口 4533，实际 %d", cfg.Server.Port)
 	}
 	if cfg.Transcode.DefaultFormat != "mp3" {
-		t.Errorf("want mp3, got %s", cfg.Transcode.DefaultFormat)
+		t.Errorf("期望 mp3，实际 %s", cfg.Transcode.DefaultFormat)
 	}
 	if cfg.Transcode.DefaultBitrate != 192 {
-		t.Errorf("want 192, got %d", cfg.Transcode.DefaultBitrate)
+		t.Errorf("期望码率 192，实际 %d", cfg.Transcode.DefaultBitrate)
 	}
 }
 
 func TestLoad_MissingFile_ReturnsDefaults(t *testing.T) {
 	cfg, err := Load("does-not-exist.yaml")
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("不应报错，实际: %v", err)
 	}
 	if cfg.Server.Port != 4533 {
-		t.Errorf("want 4533, got %d", cfg.Server.Port)
+		t.Errorf("期望默认端口 4533，实际 %d", cfg.Server.Port)
 	}
 }
 
@@ -191,29 +191,29 @@ func TestLoad_OverridesPort(t *testing.T) {
 
 	cfg, err := Load(f.Name())
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("不应报错，实际: %v", err)
 	}
 	if cfg.Server.Port != 9090 {
-		t.Errorf("want 9090, got %d", cfg.Server.Port)
+		t.Errorf("期望端口 9090，实际 %d", cfg.Server.Port)
 	}
 }
 ```
 
-- [ ] **Step 2: Run tests — confirm FAIL**
+- [ ] **步骤 2：运行测试 —— 确认失败**
 
 ```bash
 go test ./internal/config/...
 ```
 
-Expected: FAIL — `Default` and `Load` undefined
+预期：FAIL —— `Default` 和 `Load` 未定义
 
-- [ ] **Step 3: Install yaml dependency**
+- [ ] **步骤 3：安装 yaml 依赖**
 
 ```bash
 go get gopkg.in/yaml.v3
 ```
 
-- [ ] **Step 4: Implement config.go**
+- [ ] **步骤 4：实现 config.go**
 
 ```go
 // internal/config/config.go
@@ -328,25 +328,25 @@ func Load(path string) (*Config, error) {
 		if os.IsNotExist(err) {
 			return cfg, nil
 		}
-		return nil, fmt.Errorf("open config %q: %w", path, err)
+		return nil, fmt.Errorf("打开配置文件 %q: %w", path, err)
 	}
 	defer f.Close()
 	if err := yaml.NewDecoder(f).Decode(cfg); err != nil {
-		return nil, fmt.Errorf("decode config: %w", err)
+		return nil, fmt.Errorf("解析配置文件: %w", err)
 	}
 	return cfg, nil
 }
 ```
 
-- [ ] **Step 5: Run tests — confirm PASS**
+- [ ] **步骤 5：运行测试 —— 确认通过**
 
 ```bash
 go test ./internal/config/... -v
 ```
 
-Expected: 3 tests PASS
+预期：3 个测试全部 PASS
 
-- [ ] **Step 6: Create config.example.yaml**
+- [ ] **步骤 6：创建 config.example.yaml**
 
 ```yaml
 # config.example.yaml
@@ -396,24 +396,24 @@ subsonic:
   password: ""
 ```
 
-- [ ] **Step 7: Commit**
+- [ ] **步骤 7：提交**
 
 ```bash
 git add internal/config/ config.example.yaml go.mod go.sum
-git commit -m "feat: add configuration system"
+git commit -m "feat: 添加配置系统"
 ```
 
 ---
 
-## Task 3: Database layer
+## 任务 3：数据库层
 
-**Files:**
-- Create: `internal/db/schema.sql`
-- Create: `internal/db/migrations/001_init.up.sql`
-- Create: `internal/db/db.go`
-- Create: `internal/db/db_test.go`
+**涉及文件：**
+- 创建：`internal/db/schema.sql`
+- 创建：`internal/db/migrations/001_init.up.sql`
+- 创建：`internal/db/db.go`
+- 创建：`internal/db/db_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **步骤 1：写失败测试**
 
 ```go
 // internal/db/db_test.go
@@ -426,7 +426,7 @@ import (
 func TestOpen_CreatesTablesOnFirstRun(t *testing.T) {
 	db, err := Open(":memory:")
 	if err != nil {
-		t.Fatalf("Open: %v", err)
+		t.Fatalf("Open 失败: %v", err)
 	}
 	defer db.Close()
 
@@ -435,57 +435,49 @@ func TestOpen_CreatesTablesOnFirstRun(t *testing.T) {
 		`SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ('artists','albums','tracks','lyrics')`,
 	)
 	if err := row.Scan(&count); err != nil {
-		t.Fatalf("query: %v", err)
+		t.Fatalf("查询失败: %v", err)
 	}
 	if count != 4 {
-		t.Errorf("want 4 core tables, got %d", count)
+		t.Errorf("期望 4 张核心表，实际 %d", count)
 	}
 }
 
 func TestOpen_IdempotentMigrations(t *testing.T) {
-	db, err := Open(":memory:")
-	if err != nil {
-		t.Fatalf("first Open: %v", err)
-	}
-	db.Close()
-
-	// Opening the same in-memory DB won't persist, but we can verify Open()
-	// itself doesn't error when called twice on the same path.
-	// Use a temp file to test idempotency.
 	tmp := t.TempDir() + "/test.db"
 	db1, err := Open(tmp)
 	if err != nil {
-		t.Fatalf("Open 1: %v", err)
+		t.Fatalf("第一次 Open 失败: %v", err)
 	}
 	db1.Close()
 
+	// 第二次打开同一文件，迁移应幂等，不报错
 	db2, err := Open(tmp)
 	if err != nil {
-		t.Fatalf("Open 2 (idempotency): %v", err)
+		t.Fatalf("第二次 Open（幂等性测试）失败: %v", err)
 	}
 	db2.Close()
 }
 ```
 
-- [ ] **Step 2: Run tests — confirm FAIL**
+- [ ] **步骤 2：运行测试 —— 确认失败**
 
 ```bash
 go test ./internal/db/...
 ```
 
-Expected: FAIL — `Open` undefined
+预期：FAIL —— `Open` 未定义
 
-- [ ] **Step 3: Install modernc sqlite**
+- [ ] **步骤 3：安装 modernc sqlite**
 
 ```bash
 go get modernc.org/sqlite
 ```
 
-- [ ] **Step 4: Create schema.sql (reference document, not compiled into binary)**
+- [ ] **步骤 4：创建 schema.sql（参考文档，不编译进二进制）**
 
 ```sql
 -- internal/db/schema.sql
--- Source of truth for the schema. Changes go into a new migrations/*.up.sql file.
+-- Schema 参考文件，变更时同步写一个新的 migrations/*.up.sql
 
 CREATE TABLE artists (
     id          TEXT PRIMARY KEY,
@@ -561,7 +553,7 @@ CREATE INDEX idx_tracks_scrape_status ON tracks(scrape_status);
 CREATE INDEX idx_albums_artist        ON albums(artist_id);
 ```
 
-- [ ] **Step 5: Create first migration (content mirrors schema.sql)**
+- [ ] **步骤 5：创建第一个迁移文件（内容与 schema.sql 一致）**
 
 ```sql
 -- internal/db/migrations/001_init.up.sql
@@ -639,7 +631,7 @@ CREATE INDEX idx_tracks_scrape_status ON tracks(scrape_status);
 CREATE INDEX idx_albums_artist        ON albums(artist_id);
 ```
 
-- [ ] **Step 6: Implement db.go**
+- [ ] **步骤 6：实现 db.go**
 
 ```go
 // internal/db/db.go
@@ -665,21 +657,21 @@ func Open(path string) (*sql.DB, error) {
 	if path != ":memory:" {
 		if dir := filepath.Dir(path); dir != "." {
 			if err := os.MkdirAll(dir, 0755); err != nil {
-				return nil, fmt.Errorf("create db dir: %w", err)
+				return nil, fmt.Errorf("创建数据库目录: %w", err)
 			}
 		}
 	}
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
-		return nil, fmt.Errorf("open sqlite: %w", err)
+		return nil, fmt.Errorf("打开 SQLite: %w", err)
 	}
 	if _, err := db.Exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;`); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("pragmas: %w", err)
+		return nil, fmt.Errorf("设置 PRAGMA: %w", err)
 	}
 	if err := runMigrations(db); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("migrate: %w", err)
+		return nil, fmt.Errorf("执行迁移: %w", err)
 	}
 	return db, nil
 }
@@ -707,7 +699,7 @@ func runMigrations(db *sql.DB) error {
 			return err
 		}
 		if _, err := db.Exec(string(content)); err != nil {
-			return fmt.Errorf("apply %s: %w", e.Name(), err)
+			return fmt.Errorf("应用迁移 %s: %w", e.Name(), err)
 		}
 		if _, err := db.Exec(`INSERT INTO schema_migrations(version) VALUES(?)`, e.Name()); err != nil {
 			return err
@@ -717,31 +709,31 @@ func runMigrations(db *sql.DB) error {
 }
 ```
 
-- [ ] **Step 7: Run tests — confirm PASS**
+- [ ] **步骤 7：运行测试 —— 确认通过**
 
 ```bash
 go test ./internal/db/... -v
 ```
 
-Expected: 2 tests PASS
+预期：2 个测试全部 PASS
 
-- [ ] **Step 8: Commit**
+- [ ] **步骤 8：提交**
 
 ```bash
 git add internal/db/ go.mod go.sum
-git commit -m "feat: add SQLite database layer with embedded migration runner"
+git commit -m "feat: 添加 SQLite 数据库层及嵌入式迁移运行器"
 ```
 
 ---
 
-## Task 4: HTTP server + health endpoint
+## 任务 4：HTTP 服务器 + /health 端点
 
-**Files:**
-- Create: `internal/api/router.go`
-- Create: `internal/api/router_test.go`
-- Modify: `cmd/server/main.go`
+**涉及文件：**
+- 创建：`internal/api/router.go`
+- 创建：`internal/api/router_test.go`
+- 修改：`cmd/server/main.go`
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **步骤 1：写失败测试**
 
 ```go
 // internal/api/router_test.go
@@ -761,36 +753,36 @@ func TestHealth_Returns200WithStatusOK(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
-		t.Fatalf("want 200, got %d", w.Code)
+		t.Fatalf("期望状态码 200，实际 %d", w.Code)
 	}
 	var body map[string]string
 	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
-		t.Fatalf("decode body: %v", err)
+		t.Fatalf("解析响应体失败: %v", err)
 	}
 	if body["status"] != "ok" {
-		t.Errorf("want status=ok, got %q", body["status"])
+		t.Errorf("期望 status=ok，实际 %q", body["status"])
 	}
 	if body["version"] == "" {
-		t.Errorf("want non-empty version")
+		t.Errorf("version 字段不应为空")
 	}
 }
 ```
 
-- [ ] **Step 2: Run test — confirm FAIL**
+- [ ] **步骤 2：运行测试 —— 确认失败**
 
 ```bash
 go test ./internal/api/...
 ```
 
-Expected: FAIL — `NewRouter` undefined
+预期：FAIL —— `NewRouter` 未定义
 
-- [ ] **Step 3: Install Chi**
+- [ ] **步骤 3：安装 Chi**
 
 ```bash
 go get github.com/go-chi/chi/v5
 ```
 
-- [ ] **Step 4: Implement router.go**
+- [ ] **步骤 4：实现 router.go**
 
 ```go
 // internal/api/router.go
@@ -825,15 +817,15 @@ func handleHealth(w http.ResponseWriter, _ *http.Request) {
 }
 ```
 
-- [ ] **Step 5: Run test — confirm PASS**
+- [ ] **步骤 5：运行测试 —— 确认通过**
 
 ```bash
 go test ./internal/api/... -v
 ```
 
-Expected: `TestHealth_Returns200WithStatusOK` PASS
+预期：`TestHealth_Returns200WithStatusOK` PASS
 
-- [ ] **Step 6: Implement main.go**
+- [ ] **步骤 6：实现 main.go**
 
 ```go
 // cmd/server/main.go
@@ -856,18 +848,18 @@ import (
 )
 
 func main() {
-	cfgPath := flag.String("config", "config.yaml", "path to config file")
+	cfgPath := flag.String("config", "config.yaml", "配置文件路径")
 	flag.Parse()
 
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {
-		slog.Error("load config", "err", err)
+		slog.Error("加载配置失败", "err", err)
 		os.Exit(1)
 	}
 
 	database, err := db.Open(cfg.Database.Path)
 	if err != nil {
-		slog.Error("open database", "err", err)
+		slog.Error("打开数据库失败", "err", err)
 		os.Exit(1)
 	}
 	defer database.Close()
@@ -885,30 +877,30 @@ func main() {
 	defer stop()
 
 	go func() {
-		slog.Info("lyra starting", "addr", addr)
+		slog.Info("Lyra 启动", "addr", addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("server error", "err", err)
+			slog.Error("服务器错误", "err", err)
 			os.Exit(1)
 		}
 	}()
 
 	<-ctx.Done()
-	slog.Info("shutting down")
+	slog.Info("正在关闭服务器")
 	shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	srv.Shutdown(shutCtx)
 }
 ```
 
-- [ ] **Step 7: Verify it compiles**
+- [ ] **步骤 7：验证编译通过**
 
 ```bash
 go build ./cmd/server
 ```
 
-Expected: binary created in current directory, no errors
+预期：在当前目录生成二进制文件，无错误
 
-- [ ] **Step 8: Smoke test the running server**
+- [ ] **步骤 8：冒烟测试运行中的服务器**
 
 ```bash
 ./server &
@@ -918,38 +910,38 @@ kill %1
 rm server
 ```
 
-Expected output: `{"status":"ok","version":"0.1.0"}`
+预期输出：`{"status":"ok","version":"0.1.0"}`
 
-- [ ] **Step 9: Commit**
+- [ ] **步骤 9：提交**
 
 ```bash
 git add internal/api/ cmd/server/ go.mod go.sum
-git commit -m "feat: HTTP server with /health endpoint"
+git commit -m "feat: HTTP 服务器与 /health 端点"
 ```
 
 ---
 
-## Task 5: Frontend scaffold
+## 任务 5：前端脚手架
 
-**Files:**
-- Create: `web/` (Vite project via npm create)
-- Modify: `web/vite.config.ts` (set outDir to `../ui/dist`)
-- Modify: `web/src/App.vue`
-- Modify: `web/src/main.ts`
+**涉及文件：**
+- 创建：`web/`（通过 npm create 生成 Vite 项目）
+- 修改：`web/vite.config.ts`（设置 outDir 为 `../ui/dist`）
+- 修改：`web/src/App.vue`
+- 修改：`web/src/main.ts`
 
-**Note on ui/dist path:** Go's `//go:embed` cannot traverse `..` — the embed file must live in a directory that is an ancestor of the embedded path. Therefore, frontend build output goes to `ui/dist/` (a sibling of `web/`), and `ui/ui.go` embeds it. This differs from the `web/dist` path mentioned in the tech spec.
+**关于 ui/dist 路径的说明：** Go 的 `//go:embed` 不允许 `..` 路径穿越，embed 文件必须是被嵌入路径的祖先目录。因此，前端构建输出放到 `ui/dist/`（`web/` 的兄弟目录），由 `ui/ui.go` 负责 embed。这与技术文档中 `web/dist` 的描述不同，是 Go embed 机制的约束。
 
-- [ ] **Step 1: Scaffold Vite project**
+- [ ] **步骤 1：生成 Vite 项目**
 
-Run from repo root (`/home/yxx/develop/Lyra`):
+从仓库根目录执行：
 
 ```bash
 npm create vite@latest web -- --template vue-ts
 ```
 
-If prompted interactively: select framework=Vue, variant=TypeScript. If `web/` already has content, Vite may ask to overwrite — confirm yes.
+如有交互提示：选择 framework=Vue，variant=TypeScript。若 `web/` 目录已有内容，确认覆盖。
 
-- [ ] **Step 2: Install frontend dependencies**
+- [ ] **步骤 2：安装前端依赖**
 
 ```bash
 cd web
@@ -958,9 +950,9 @@ npm install naive-ui pinia howler @types/howler
 cd ..
 ```
 
-- [ ] **Step 3: Update vite.config.ts to output to ui/dist**
+- [ ] **步骤 3：更新 vite.config.ts，将输出目录改为 ui/dist**
 
-Replace the entire contents of `web/vite.config.ts`:
+完整替换 `web/vite.config.ts`：
 
 ```typescript
 // web/vite.config.ts
@@ -983,7 +975,7 @@ export default defineConfig({
 })
 ```
 
-- [ ] **Step 4: Replace App.vue with Lyra placeholder**
+- [ ] **步骤 4：用 Lyra 占位页替换默认 App.vue**
 
 ```vue
 <!-- web/src/App.vue -->
@@ -993,7 +985,7 @@ export default defineConfig({
       <n-layout-content>
         <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:1rem">
           <h1 style="font-size:3rem;margin:0">Lyra</h1>
-          <p style="color:#888;margin:0">Self-hosted music server — coming soon</p>
+          <p style="color:#888;margin:0">自托管音乐服务器 —— 即将上线</p>
         </div>
       </n-layout-content>
     </n-layout>
@@ -1005,7 +997,7 @@ import { NConfigProvider, NLayout, NLayoutContent, darkTheme } from 'naive-ui'
 </script>
 ```
 
-- [ ] **Step 5: Update main.ts to use Pinia**
+- [ ] **步骤 5：更新 main.ts，引入 Pinia**
 
 ```typescript
 // web/src/main.ts
@@ -1018,32 +1010,31 @@ app.use(createPinia())
 app.mount('#app')
 ```
 
-- [ ] **Step 6: Build frontend and verify output lands in ui/dist**
+- [ ] **步骤 6：构建前端，确认输出落在 ui/dist**
 
 ```bash
 cd web && npm run build && cd ..
 ls ui/dist/
 ```
 
-Expected: `index.html` and an `assets/` directory inside `ui/dist/`
+预期：`ui/dist/` 中存在 `index.html` 和 `assets/` 目录
 
-- [ ] **Step 7: Commit**
+- [ ] **步骤 7：提交**
 
 ```bash
 git add web/
-git commit -m "feat: scaffold Vue 3 + TypeScript frontend"
+git commit -m "feat: 初始化 Vue 3 + TypeScript 前端脚手架"
 ```
 
 ---
 
-## Task 6: Go embed — serve frontend from binary
+## 任务 6：Go embed —— 将前端打入二进制
 
-**Files:**
-- Create: `ui/ui.go`
-- Modify: `internal/api/router.go`
-- Modify: `internal/api/router_test.go`
+**涉及文件：**
+- 创建：`ui/ui.go`
+- 修改：`internal/api/router.go`
 
-- [ ] **Step 1: Create ui/ui.go**
+- [ ] **步骤 1：创建 ui/ui.go**
 
 ```go
 // ui/ui.go
@@ -1055,9 +1046,9 @@ import "embed"
 var Dist embed.FS
 ```
 
-- [ ] **Step 2: Add static file handler to router.go**
+- [ ] **步骤 2：在 router.go 中添加静态文件服务**
 
-Replace `internal/api/router.go` in full:
+完整替换 `internal/api/router.go`：
 
 ```go
 // internal/api/router.go
@@ -1082,13 +1073,12 @@ func NewRouter() http.Handler {
 
 	r.Get("/health", handleHealth)
 
-	// Serve embedded frontend for all non-API routes
+	// 所有非 API 路由返回嵌入的前端文件
 	sub, err := fs.Sub(ui.Dist, "dist")
 	if err != nil {
-		panic("embed ui/dist: " + err.Error())
+		panic("embed ui/dist 失败: " + err.Error())
 	}
-	fileServer := http.FileServer(http.FS(sub))
-	r.Handle("/*", fileServer)
+	r.Handle("/*", http.FileServer(http.FS(sub)))
 
 	return r
 }
@@ -1102,71 +1092,69 @@ func handleHealth(w http.ResponseWriter, _ *http.Request) {
 }
 ```
 
-- [ ] **Step 3: Verify tests still pass (health test is unaffected)**
+- [ ] **步骤 3：运行测试 —— 确认 health 测试仍然通过**
 
 ```bash
 go test ./internal/api/... -v
 ```
 
-Expected: `TestHealth_Returns200WithStatusOK` PASS
+预期：`TestHealth_Returns200WithStatusOK` PASS
 
-- [ ] **Step 4: Build full binary and smoke test static serving**
+- [ ] **步骤 4：构建完整二进制并冒烟测试静态文件服务**
 
 ```bash
 go build -o lyra ./cmd/server
 ./lyra &
 sleep 1
-# Health endpoint
 curl -s http://localhost:4533/health
-# Static file — should return HTML
 curl -s http://localhost:4533/ | head -5
 kill %1
 rm lyra
 ```
 
-Expected:
+预期：
 - `/health` → `{"status":"ok","version":"0.1.0"}`
-- `/` → starts with `<!DOCTYPE html>`
+- `/` → 以 `<!DOCTYPE html>` 开头
 
-- [ ] **Step 5: Commit**
+- [ ] **步骤 5：提交**
 
 ```bash
 git add ui/ internal/api/ go.mod go.sum
-git commit -m "feat: embed Vue frontend into Go binary via ui package"
+git commit -m "feat: 通过 ui 包将 Vue 前端嵌入 Go 二进制"
 ```
 
 ---
 
-## Task 7: Build tooling + Docker + CLAUDE.md
+## 任务 7：构建工具 + Docker + CLAUDE.md
 
-**Files:**
-- Create: `Makefile`
-- Create: `Dockerfile`
-- Create: `docker-compose.yml`
-- Modify: `.gitignore`
-- Create: `CLAUDE.md`
+**涉及文件：**
+- 创建：`Makefile`
+- 创建：`Dockerfile`
+- 创建：`docker-compose.yml`
+- 修改：`.gitignore`
+- 创建：`CLAUDE.md`
 
-- [ ] **Step 1: Create .gitignore**
+- [ ] **步骤 1：创建 .gitignore**
 
 ```gitignore
-# Go build output
+# Go 构建产物
 lyra
 server
 
-# Frontend build output (regenerated by make build-frontend)
+# 前端构建产物（由 make build-frontend 重新生成）
 ui/dist/
 !ui/dist/.gitkeep
 web/node_modules/
 
-# Runtime data
+# 运行时数据
 data/
 
-# OS / editor
+# 系统 / 编辑器
 .DS_Store
 *.swp
 ```
 
-- [ ] **Step 2: Create Makefile**
+- [ ] **步骤 2：创建 Makefile**
 
 ```makefile
 .PHONY: build build-frontend test dev-backend dev-frontend docker-build clean
@@ -1195,29 +1183,29 @@ clean:
 	touch ui/dist/.gitkeep
 ```
 
-- [ ] **Step 3: Create Dockerfile**
+- [ ] **步骤 3：创建 Dockerfile**
 
 ```dockerfile
-# Stage 1: build frontend
+# 阶段 1：构建前端
 FROM node:20-alpine AS frontend
 WORKDIR /app/web
 COPY web/package*.json ./
 RUN npm ci
 COPY web/ ./
-# vite.config.ts sets outDir: ../ui/dist → outputs to /app/ui/dist
+# vite.config.ts 设置 outDir: ../ui/dist，输出到 /app/ui/dist
 RUN npm run build
 
-# Stage 2: build Go binary
+# 阶段 2：构建 Go 二进制
 FROM golang:1.22-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-# Overwrite the .gitkeep placeholder with the real build
+# 用真实构建产物覆盖 .gitkeep 占位文件
 COPY --from=frontend /app/ui/dist ./ui/dist
 RUN go build -o lyra ./cmd/server
 
-# Stage 3: minimal runtime image
+# 阶段 3：最小运行时镜像
 FROM alpine:3.19
 RUN apk add --no-cache ffmpeg chromaprint
 COPY --from=builder /app/lyra /usr/local/bin/lyra
@@ -1225,7 +1213,7 @@ EXPOSE 4533
 CMD ["lyra"]
 ```
 
-- [ ] **Step 4: Create docker-compose.yml**
+- [ ] **步骤 4：创建 docker-compose.yml**
 
 ```yaml
 services:
@@ -1242,68 +1230,68 @@ services:
     restart: unless-stopped
 ```
 
-- [ ] **Step 5: Create CLAUDE.md**
+- [ ] **步骤 5：创建 CLAUDE.md**
 
 ```markdown
-# Lyra — Claude Code Reference
+# Lyra — Claude Code 参考文档
 
-Self-hosted music server. Go backend + Vue 3 frontend in a single binary.
+自托管音乐服务器，Go 后端 + Vue 3 前端打包为单一二进制文件。
 
-## Quick Commands
+## 常用命令
 
-| Task | Command |
-|------|---------|
-| Build everything | `make build` |
-| Build frontend only | `make build-frontend` |
-| Run backend (dev) | `make dev-backend` |
-| Run frontend (dev) | `make dev-frontend` |
-| Run all tests | `make test` |
-| Build Docker image | `make docker-build` |
+| 任务 | 命令 |
+|------|------|
+| 完整构建 | `make build` |
+| 仅构建前端 | `make build-frontend` |
+| 运行后端（开发） | `make dev-backend` |
+| 运行前端（开发） | `make dev-frontend` |
+| 运行全部测试 | `make test` |
+| 构建 Docker 镜像 | `make docker-build` |
 
-## Dev Workflow
+## 开发工作流
 
-Two terminals:
-1. `make dev-frontend` — Vite dev server on :5173, proxies /api and /rest to :4533
-2. `make dev-backend` — Go server on :4533
+开两个终端：
+1. `make dev-frontend` —— Vite 开发服务器监听 :5173，将 /api、/rest 代理到 :4533
+2. `make dev-backend` —— Go 服务器监听 :4533
 
-Frontend at http://localhost:5173, API at http://localhost:4533.
+前端访问 http://localhost:5173，API 访问 http://localhost:4533。
 
-## Architecture
+## 架构
 
 ```
-cmd/server/main.go      entry point
-internal/config/        YAML config loader
-internal/db/            SQLite via modernc (pure Go, no CGo)
-  migrations/           *.up.sql files applied in alphabetical order
-internal/api/           Chi router — /health, static frontend, future API routes
-ui/ui.go                //go:embed all:dist — embeds web/dist at compile time
-web/                    Vue 3 source (npm project)
-  vite.config.ts        outDir: ../ui/dist (not web/dist — Go embed path constraint)
+cmd/server/main.go      入口，组装 config + db + router
+internal/config/        YAML 配置加载器
+internal/db/            SQLite（modernc 纯 Go，无 CGo）
+  migrations/           *.up.sql 按字母顺序依次执行
+internal/api/           Chi 路由 —— /health、静态前端、后续 API 路由
+ui/ui.go                //go:embed all:dist —— 编译时嵌入前端
+web/                    Vue 3 源码（npm 项目）
+  vite.config.ts        outDir: ../ui/dist（而非 web/dist，受 Go embed 路径约束）
 ```
 
-## Key Technical Decisions
+## 关键技术决策
 
-- **modernc.org/sqlite** (not mattn/go-sqlite3): pure Go, no CGo, cross-compiles to arm64 easily
-- **Hand-rolled migration runner**: reads `internal/db/migrations/*.up.sql` in alphabetical order, tracks applied versions in `schema_migrations` table; avoids golang-migrate's CGo sqlite dependency
-- **ui/ package for embed**: Go's `//go:embed` cannot traverse `..`, so frontend output goes to `ui/dist/` (sibling of `web/`), embedded by `ui/ui.go`
-- **Subsonic API password is separate** from the admin token (`subsonic.password` in config)
+- **modernc.org/sqlite**（非 mattn/go-sqlite3）：纯 Go，无 CGo，可轻松交叉编译到 arm64
+- **手写迁移运行器**：按字母顺序读取 `internal/db/migrations/*.up.sql`，在 `schema_migrations` 表中追踪已执行版本；避免 golang-migrate 的 CGo sqlite 依赖
+- **ui/ 包负责 embed**：Go `//go:embed` 不能使用 `..` 路径，前端输出放到 `ui/dist/`（`web/` 的兄弟目录），由 `ui/ui.go` 嵌入
+- **Subsonic 密码独立**：`subsonic.password` 配置项与管理员 Token 隔离
 
-## Adding a Database Migration
+## 添加数据库迁移
 
-1. Create `internal/db/migrations/NNN_description.up.sql` (NNN = next number, zero-padded)
-2. Update `internal/db/schema.sql` to reflect the new state
-3. Run `go test ./internal/db/...` to verify migration applies cleanly
+1. 创建 `internal/db/migrations/NNN_描述.up.sql`（NNN 为下一个序号，补零对齐）
+2. 同步更新 `internal/db/schema.sql` 至最新状态
+3. 运行 `go test ./internal/db/...` 验证迁移可以正常执行
 ```
 
-- [ ] **Step 6: Verify Docker build succeeds**
+- [ ] **步骤 6：验证 Docker 构建成功**
 
 ```bash
 make docker-build
 ```
 
-Expected: image `lyra:latest` created, no build errors
+预期：镜像 `lyra:latest` 创建成功，无构建错误
 
-- [ ] **Step 7: Smoke test Docker container**
+- [ ] **步骤 7：冒烟测试 Docker 容器**
 
 ```bash
 docker run --rm -p 4533:4533 lyra:latest &
@@ -1312,39 +1300,38 @@ curl -s http://localhost:4533/health
 docker stop $(docker ps -q --filter ancestor=lyra:latest)
 ```
 
-Expected: `{"status":"ok","version":"0.1.0"}`
+预期：`{"status":"ok","version":"0.1.0"}`
 
-- [ ] **Step 8: Run full test suite one final time**
+- [ ] **步骤 8：最终运行完整测试套件**
 
 ```bash
 make test
 ```
 
-Expected: all tests PASS, no failures
+预期：所有测试 PASS，无失败
 
-- [ ] **Step 9: Final commit and push**
+- [ ] **步骤 9：最终提交并推送**
 
 ```bash
 git add .gitignore Makefile Dockerfile docker-compose.yml CLAUDE.md docs/
-git commit -m "chore: add Makefile, Dockerfile, docker-compose, CLAUDE.md"
+git commit -m "chore: 添加 Makefile、Dockerfile、docker-compose、CLAUDE.md"
 git push origin master
 ```
 
 ---
 
-## Self-Review Checklist
+## 自检清单
 
-**Spec coverage:**
-- [x] US-30 (YAML config) → Task 2
-- [x] US-31 (data persistence on restart) → Task 3 (SQLite WAL, data dir created by db.Open)
-- [x] US-18 web playback / US-28 Subsonic client compatibility → router scaffold in Task 4 (stubs for v0.1 feature tasks)
-- [x] Health endpoint + Docker (v0.1 acceptance criteria) → Tasks 4 + 7
-- [x] Binary naming `lyra` → consistent throughout
-- [x] Single binary deployment → embed in Task 6
+**需求覆盖：**
+- [x] US-30（YAML 配置）→ 任务 2
+- [x] US-31（重启后数据持久化）→ 任务 3（SQLite WAL，db.Open 自动创建数据目录）
+- [x] Health 端点 + Docker（v0.1 验收标准）→ 任务 4 + 7
+- [x] 二进制命名 `lyra` → 全文统一
+- [x] 单二进制部署 → 任务 6 embed
 
-**Out of scope for this plan (separate feature plans):**
-- File scanner (US-01, US-03)
-- Subsonic API endpoints (US-28, US-29)
-- Metadata scraping
-- Lyrics
-- Full Web UI (player, album grid, search)
+**本计划范围之外（后续独立计划）：**
+- 文件扫描器（US-01、US-03）
+- Subsonic API 端点（US-28、US-29）
+- 元数据刮削
+- 歌词
+- 完整 Web UI（播放器、专辑墙、搜索）

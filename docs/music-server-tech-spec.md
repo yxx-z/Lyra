@@ -59,7 +59,7 @@
 | UI 组件 | Naive UI |
 | 状态管理 | Pinia |
 | 音频播放 | Web Audio API + Howler.js |
-| 打包方式 | 编译进 Go 二进制（embed.FS） |
+| 打包方式 | 编译进 Go 二进制（embed.FS，输出目录 `ui/dist/`） |
 
 ### 2.3 外部依赖（运行时）
 
@@ -160,7 +160,7 @@ lyra/
 │   │   │   └── library.ts
 │   │   └── api/
 │   │       └── client.ts
-│   └── dist/                     # 构建输出（embed 进二进制）
+│   └── dist/                     # 构建输出（临时目录，实际输出到 ui/dist/）
 ├── config.example.yaml
 ├── Dockerfile
 ├── Makefile
