@@ -35,11 +35,13 @@ type Scanner struct {
 	processed atomic.Int64
 	errors    atomic.Int64
 
-	mu        sync.RWMutex
-	startedAt time.Time
+	mu             sync.RWMutex
+	startedAt      time.Time
+	watcherStarted bool
 
 	stopCh chan struct{}
 	wg     sync.WaitGroup
+	once   sync.Once
 }
 
 // NewScanner creates a Scanner. Call Start to begin scanning.
@@ -54,7 +56,8 @@ func NewScanner(db *sql.DB, cfg config.LibraryConfig) *Scanner {
 
 // Start begins an initial full scan (if paths configured) and starts fsnotify watcher (if cfg.Watch).
 func (s *Scanner) Start() error {
-	if len(s.cfg.Paths) > 0 {
+	hasPaths := len(s.cfg.Paths) > 0
+	if hasPaths {
 		if s.running.CompareAndSwap(false, true) {
 			s.wg.Add(1)
 			go func() {
@@ -63,10 +66,18 @@ func (s *Scanner) Start() error {
 			}()
 		}
 	}
-	if s.cfg.Watch && len(s.cfg.Paths) > 0 {
-		if err := startWatcher(s); err != nil {
-			// watcher failure is non-fatal
-			_ = err
+	if s.cfg.Watch && hasPaths {
+		s.mu.Lock()
+		alreadyStarted := s.watcherStarted
+		if !alreadyStarted {
+			s.watcherStarted = true
+		}
+		s.mu.Unlock()
+		if !alreadyStarted {
+			if err := startWatcher(s); err != nil {
+				// watcher failure is non-fatal
+				_ = err
+			}
 		}
 	}
 	return nil
@@ -100,8 +111,9 @@ func (s *Scanner) Status() ScanStatus {
 }
 
 // Stop signals the scanner to halt and waits for all goroutines to exit.
+// Safe to call multiple times — subsequent calls are no-ops.
 func (s *Scanner) Stop() {
-	close(s.stopCh)
+	s.once.Do(func() { close(s.stopCh) })
 	s.wg.Wait()
 }
 
@@ -119,7 +131,10 @@ func (s *Scanner) doScan() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Track the cancel-goroutine in wg so Stop() waits for it to exit cleanly.
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
 		select {
 		case <-s.stopCh:
 			cancel()
