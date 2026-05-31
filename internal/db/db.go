@@ -38,10 +38,17 @@ func Open(path string) (*sql.DB, error) {
 		db.Close()
 		return nil, fmt.Errorf("设置 WAL 模式: %w", err)
 	}
-	// :memory: 不支持 WAL，忽略；文件数据库若无法设为 WAL 则记录警告
+	// :memory: 不支持 WAL，忽略；文件数据库若无法设为 WAL 则报错
 	if path != ":memory:" && journalMode != "wal" {
 		db.Close()
 		return nil, fmt.Errorf("无法启用 WAL 模式，当前模式: %s（网络文件系统不支持 WAL）", journalMode)
+	}
+	// :memory: 的外键约束通过 DSN 参数无法设置，单独启用
+	if path == ":memory:" {
+		if _, err := db.Exec(`PRAGMA foreign_keys=ON`); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("启用外键约束: %w", err)
+		}
 	}
 	if err := runMigrations(db); err != nil {
 		db.Close()
