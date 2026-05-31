@@ -1,0 +1,45 @@
+# config.example.yaml
+server:
+  host: 0.0.0.0
+  port: 4533
+  base_url: ""           # 反向代理时设置，如 /music
+
+auth:
+  disable: false         # 内网纯信任环境可设为 true 关闭认证
+  token: ""              # 留空时启动自动生成并写回配置文件
+
+library:
+  paths:
+    - /music
+  scan_interval: 3600    # 秒，0 = 仅手动扫描
+  watch: true
+
+database:
+  path: ./data/music.db
+
+cache:
+  artwork_dir: ./data/artwork
+  artwork_max_size_mb: 2048
+
+scraper:
+  enabled: true
+  musicbrainz:
+    user_agent: "Lyra/0.1 (your@email.com)"
+  lastfm:
+    api_key: ""
+  acoustid:
+    api_key: ""
+  netease:
+    enabled: true
+  spotify:
+    client_id: ""
+    client_secret: ""
+
+transcode:
+  ffmpeg_path: ffmpeg
+  default_format: mp3
+  default_bitrate: 192
+
+subsonic:
+  enabled: true
+  password: ""
