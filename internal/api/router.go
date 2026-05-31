@@ -51,7 +51,7 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 		cover := v1.NewCoverHandler(db)
 		r.Get("/cover/{id}", cover.GetCover)
 
-		stream := v1.NewStreamHandler(db)
+		stream := v1.NewStreamHandler(db, cfg.Transcode)
 		r.Get("/tracks/{id}/stream", stream.Stream)
 
 		search := v1.NewSearchHandler(db)
