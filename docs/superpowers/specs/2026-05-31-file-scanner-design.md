@@ -89,9 +89,32 @@ ingester goroutine（单个）        串行写 DB，避免 SQLite 写锁争用
 | 优先级 | 来源 | 条件 |
 |--------|------|------|
 | 1 | 内嵌标签（ID3v2 / Vorbis Comment / iTunes Tag） | 始终尝试 |
-| 2 | 目录推断：祖父目录名 → artist，父目录名 → album | 文件距库根 ≥ 2 层时 |
+| 2a | 目录推断（双层）：祖父目录名 → artist，父目录名 → album | 文件距库根 ≥ 2 层 |
+| 2b | 目录推断（单层解析）：解析父目录名中的 `艺术家 - 专辑` 模式 | 文件距库根 = 1 层 |
 | 3 | 文件名推断：去扩展名 → title，解析 `NN - 曲名` 格式 → track_number | 始终尝试 |
 | 4 | 默认值 | title = 文件名，artist = "未知艺术家"，album = "未知专辑" |
+
+### 单层目录解析规则（优先级 2b）
+
+处理如下命名约定：
+
+```
+蔡琴 - 金片子 贰・魂萦旧梦 (2015) - WEB-DL - 16bit ALAC-HHWEB/
+周杰伦 - 叶惠美 (2003)/
+The Beatles - Abbey Road (1969) [FLAC]/
+```
+
+解析算法：
+1. 以第一个 ` - `（空格-连字符-空格）为分隔符切割
+2. 左侧部分 trim → artist
+3. 右侧部分继续清洗 → album：
+   - 去掉尾部年份：`\s*\(\d{4}\)` 
+   - 去掉尾部格式信息：`\s*-\s*(WEB|FLAC|MP3|AAC|ALAC|DL|CDRip|320k).*`（大小写不敏感）
+   - 去掉尾部方括号块：`\s*\[.*\]`
+   - trim 剩余空白
+4. 若切割后左侧为空或右侧为空，则整个目录名作为 album，artist 留空
+
+**注意**：WEB-DL / ALAC 等来源的文件内嵌标签通常完整，2b 主要用于标签被抹掉的情况。
 
 **去重规则**：查找 artist/album 时用 `strings.ToLower(strings.TrimSpace(name))` 规范化，存储保留原始大小写。
 
@@ -201,7 +224,7 @@ scanner.Stop()
 | 测试 | 方式 |
 |------|------|
 | tag_reader 读取各格式标签 | 用 `internal/scanner/testdata/` 下的小样本文件（≤ 10KB，提交到 git）|
-| 目录推断逻辑 | 单元测试，构造假路径 |
+| 目录推断逻辑（双层 + 单层解析） | 单元测试，覆盖：双层路径、`艺术家 - 专辑 (年份) - 格式`、无 ` - ` 的单层路径 |
 | ingester 去重 | 内存 SQLite，重复 Ingest 同一文件验证不重复 |
 | walker 过滤 | 单元测试，临时目录 + 混合文件 |
 | 扫描进度原子性 | 并发调用 Status() 验证无 race |
