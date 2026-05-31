@@ -35,7 +35,9 @@ func TestLoad_OverridesPort(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Remove(f.Name())
-	f.WriteString("server:\n  port: 9090\n")
+	if _, err := f.WriteString("server:\n  port: 9090\n"); err != nil {
+		t.Fatal(err)
+	}
 	f.Close()
 
 	cfg, err := Load(f.Name())

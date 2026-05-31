@@ -2,6 +2,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -107,7 +108,7 @@ func Load(path string) (*Config, error) {
 	cfg := Default()
 	f, err := os.Open(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return cfg, nil
 		}
 		return nil, fmt.Errorf("打开配置文件 %q: %w", path, err)
