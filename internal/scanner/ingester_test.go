@@ -56,7 +56,7 @@ func TestIngest_Dedup_SameArtistCaseInsensitive(t *testing.T) {
 	ing := NewIngester(d)
 
 	m1 := TrackMeta{FilePath: "/music/a.flac", Title: "A", Artist: "蔡琴", Album: "X"}
-	m2 := TrackMeta{FilePath: "/music/b.flac", Title: "B", Artist: "蔡 琴 ", Album: "X"} // 空格变体
+	m2 := TrackMeta{FilePath: "/music/b.flac", Title: "B", Artist: "蔡琴 ", Album: "X"} // 尾部空格变体
 	ing.Ingest(m1)
 	ing.Ingest(m2)
 

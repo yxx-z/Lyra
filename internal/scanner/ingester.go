@@ -53,20 +53,16 @@ func (ing *Ingester) MarkUnavailable(filePath string) error {
 	return err
 }
 
-// normalize lowercases and removes all whitespace for dedup comparisons.
+// normalize lowercases and trims leading/trailing whitespace for dedup comparisons.
+// Internal spaces are preserved: "AC DC" and "ACDC" remain distinct.
 func normalize(s string) string {
-	s = strings.ToLower(s)
-	// Remove all whitespace so "蔡 琴 " and "蔡琴" are treated as identical.
-	return strings.Join(strings.Fields(s), "")
+	return strings.ToLower(strings.TrimSpace(s))
 }
 
 func (ing *Ingester) findOrCreateArtist(name string) (string, error) {
-	key := normalize(name)
 	var id string
-	// sort_name stores the normalized (lowercased, whitespace-collapsed) form
-	// so we can do exact-match dedup regardless of SQLite collation.
 	err := ing.db.QueryRow(
-		`SELECT id FROM artists WHERE sort_name=?`, key,
+		`SELECT id FROM artists WHERE lower(trim(name))=?`, normalize(name),
 	).Scan(&id)
 	if err == nil {
 		return id, nil
@@ -77,8 +73,8 @@ func (ing *Ingester) findOrCreateArtist(name string) (string, error) {
 	id = uuid.New().String()
 	now := time.Now()
 	_, err = ing.db.Exec(
-		`INSERT INTO artists(id,name,sort_name,created_at,updated_at) VALUES(?,?,?,?,?)`,
-		id, name, key, now, now,
+		`INSERT INTO artists(id,name,created_at,updated_at) VALUES(?,?,?,?)`,
+		id, name, now, now,
 	)
 	return id, err
 }
