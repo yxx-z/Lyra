@@ -1,4 +1,62 @@
 // cmd/server/main.go
 package main
 
-func main() {}
+import (
+	"context"
+	"flag"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/yxx-z/lyra/internal/api"
+	"github.com/yxx-z/lyra/internal/config"
+	"github.com/yxx-z/lyra/internal/db"
+)
+
+func main() {
+	cfgPath := flag.String("config", "config.yaml", "配置文件路径")
+	flag.Parse()
+
+	cfg, err := config.Load(*cfgPath)
+	if err != nil {
+		slog.Error("加载配置失败", "err", err)
+		os.Exit(1)
+	}
+
+	database, err := db.Open(cfg.Database.Path)
+	if err != nil {
+		slog.Error("打开数据库失败", "err", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	router := api.NewRouter()
+	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
+	srv := &http.Server{
+		Addr:         addr,
+		Handler:      router,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second,
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		slog.Info("Lyra 启动", "addr", addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("服务器错误", "err", err)
+			os.Exit(1)
+		}
+	}()
+
+	<-ctx.Done()
+	slog.Info("正在关闭服务器")
+	shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	srv.Shutdown(shutCtx)
+}
