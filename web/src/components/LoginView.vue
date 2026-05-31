@@ -2,35 +2,51 @@
   <main class="login-screen">
     <section class="login-panel">
       <div>
-        <p class="eyebrow">Self-hosted music</p>
+        <p class="eyebrow">Self-Hosted Music Archive</p>
         <h1>Lyra</h1>
-        <p class="muted">Sign in to browse and play your local library.</p>
+        <p class="muted">登录即可浏览并聆听您的本地高品质无损音乐库。</p>
       </div>
 
-      <n-form class="login-form" @submit.prevent="submit">
-        <n-form-item label="Username">
-          <n-input v-model:value="username" autocomplete="username" placeholder="admin" />
-        </n-form-item>
-        <n-form-item label="Password">
-          <n-input
-            v-model:value="password"
+      <form class="login-form" @submit.prevent="submit">
+        <div class="custom-form-group">
+          <label for="username">用户名</label>
+          <input
+            id="username"
+            v-model="username"
+            autocomplete="username"
+            class="custom-input"
+            placeholder="admin"
+            required
+            type="text"
+          />
+        </div>
+        <div class="custom-form-group">
+          <label for="password">密码</label>
+          <input
+            id="password"
+            v-model="password"
             autocomplete="current-password"
-            placeholder="Password"
+            class="custom-input"
+            placeholder="请输入密码"
+            required
             type="password"
           />
-        </n-form-item>
-        <n-alert v-if="error" type="error" :bordered="false">
+        </div>
+
+        <div v-if="error" class="custom-alert">
           {{ error }}
-        </n-alert>
-        <n-button attr-type="submit" block type="primary" :loading="loading"> Sign in </n-button>
-      </n-form>
+        </div>
+
+        <button :disabled="loading" class="custom-btn-primary" type="submit">
+          {{ loading ? '正在登入...' : '立即登录' }}
+        </button>
+      </form>
     </section>
   </main>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { NAlert, NButton, NForm, NFormItem, NInput } from 'naive-ui'
 
 const emit = defineEmits<{
   login: [payload: { username: string; password: string }]

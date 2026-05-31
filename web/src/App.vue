@@ -1,81 +1,106 @@
 <template>
-  <n-config-provider :theme="darkTheme">
-    <n-message-provider>
-      <LoginView v-if="showLogin" :loading="loginLoading" :error="loginError" @login="handleLogin" />
+  <div>
+    <!-- 1. 登录模式 -->
+    <LoginView
+      v-if="showLogin"
+      :loading="loginLoading"
+      :error="loginError"
+      @login="handleLogin"
+    />
 
-      <LibraryShell
-        v-else
-        :mode="mode"
-        @change-mode="changeMode"
-        @refresh="refreshCurrentView"
-        @logout="logout"
-        @search="runSearch"
-      >
-        <n-alert
-          v-if="globalError"
-          class="global-alert"
-          type="error"
-          :bordered="false"
-          closable
-          @close="globalError = ''"
-        >
+    <!-- 2. 全局主系统 -->
+    <LibraryShell
+      v-else
+      :mode="mode"
+      @change-mode="changeMode"
+      @refresh="refreshCurrentView"
+      @logout="logout"
+      @search="runSearch"
+    >
+      <!-- 高品质手写浮动 Alert 提示栏 -->
+      <div v-if="globalError" class="global-alert">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px; color: var(--danger); flex-shrink: 0; margin-top: 1px;">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <div style="flex: 1; font-size: 13px; font-weight: 500; line-height: 1.4;">
           {{ globalError }}
-        </n-alert>
+        </div>
+        <button class="global-alert-close" type="button" @click="globalError = ''">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
 
-        <SearchPanel
-          v-if="searchQuery"
-          :query="searchQuery"
-          :results="searchResults"
-          :loading="searchLoading"
-          @close="closeSearch"
-          @play-track="playSearchTrack"
-          @select-album="selectAlbum"
-          @select-artist="selectArtistFromSearch"
+      <!-- 搜索展示面板 (最高优先级覆盖主面板) -->
+      <SearchPanel
+        v-if="searchQuery"
+        :query="searchQuery"
+        :results="searchResults"
+        :loading="searchLoading"
+        @close="closeSearch"
+        @play-track="playSearchTrack"
+        @select-album="selectAlbum"
+        @select-artist="selectArtistFromSearch"
+      />
+
+      <!-- 模块 A: 专辑库双栏侧滑交互 -->
+      <div
+        v-else-if="mode === 'albums'"
+        :class="{ 'has-detail': selectedAlbum }"
+        class="content-grid"
+      >
+        <AlbumGrid
+          :albums="albums"
+          :selected-album-id="selectedAlbum?.id || ''"
+          :loading="albumsLoading"
+          @select="selectAlbum"
+          @quick-play="playEntireAlbum"
         />
-
-        <template v-else-if="mode === 'albums'">
-          <AlbumGrid
-            :albums="albums"
-            :selected-album-id="selectedAlbum?.id || ''"
-            :loading="albumsLoading"
-            @select="selectAlbum"
-          />
-          <AlbumDetail :album="selectedAlbum" @play="playAlbumTrack" />
-        </template>
-
-        <ArtistBrowser
-          v-else-if="mode === 'artists'"
-          :artists="artists"
-          :selected-artist="selectedArtist"
-          @select-artist="selectArtist"
-          @select-album="selectAlbum"
+        <AlbumDetail
+          :album="selectedAlbum"
+          @play="playAlbumTrack"
         />
+      </div>
 
-        <ScanPanel
-          v-else
-          :status="scanStatus"
-          :triggering="scanTriggering"
-          @trigger="triggerScan"
-        />
+      <!-- 模块 B: 歌手收纳展板 -->
+      <ArtistBrowser
+        v-else-if="mode === 'artists'"
+        :artists="artists"
+        :selected-artist="selectedArtist"
+        @select-artist="selectArtist"
+        @select-album="selectAlbum"
+        @quick-play-album="playEntireAlbum"
+      />
 
-        <template #player>
-          <PlayerBar :track="playerTrack" />
-        </template>
-      </LibraryShell>
-    </n-message-provider>
-  </n-config-provider>
+      <!-- 模块 C: 系统扫描管理 -->
+      <ScanPanel
+        v-else
+        :status="scanStatus"
+        :triggering="scanTriggering"
+        @trigger="triggerScan"
+      />
+
+      <!-- 3. 常驻高保真控制台插槽 -->
+      <template #player>
+        <PlayerBar />
+      </template>
+    </LibraryShell>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { NAlert, NConfigProvider, NMessageProvider, darkTheme } from 'naive-ui'
+import { usePlayerStore } from './stores/player'
 import { ApiClient, ApiError, tokenStorage } from './api/client'
 import type {
   AlbumDetail as AlbumDetailType,
   AlbumSummary,
   ArtistDetail,
   ArtistSummary,
-  PlayerTrack,
   ScanStatus,
   SearchResponse,
   TrackResult,
@@ -90,6 +115,9 @@ import LoginView from './components/LoginView.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import ScanPanel from './components/ScanPanel.vue'
 import SearchPanel from './components/SearchPanel.vue'
+
+// 引入全局音频 Store
+const playerStore = usePlayerStore()
 
 const token = ref(tokenStorage.load())
 const anonymousAccess = ref(false)
@@ -119,7 +147,6 @@ const scanStatus = reactive<ScanStatus>({
   started_at: '',
 })
 const scanTriggering = ref(false)
-const playerTrack = ref<PlayerTrack | null>(null)
 
 onMounted(() => {
   void boot()
@@ -273,24 +300,70 @@ function refreshCurrentView() {
   }
 }
 
+// 核心功能：用户在专辑列表里点击某首歌，触发专辑内全盘连播
 function playAlbumTrack(track: TrackSummary) {
-  playerTrack.value = {
-    trackId: track.id,
-    title: track.title,
+  if (!selectedAlbum.value) return
+
+  // 拼装连续播放队列，并映射字段类型
+  const queue = selectedAlbum.value.tracks.map((t) => ({
+    trackId: t.id,
+    title: t.title,
     artist: selectedAlbum.value?.artist,
     album: selectedAlbum.value?.title,
-    streamUrl: track.stream_url,
+    streamUrl: t.stream_url,
+    coverUrl: selectedAlbum.value?.cover_url,
+  }))
+
+  const activeTrack = queue.find((t) => t.trackId === track.id)
+  if (activeTrack) {
+    playerStore.playTrack(activeTrack, queue)
   }
 }
 
+// 核心高阶功能：在网格中一键快捷播放整张专辑，实现全自动连续开播
+async function playEntireAlbum(albumId: string) {
+  try {
+    const albumDetail = await api.getAlbum(albumId)
+    if (albumDetail && albumDetail.tracks && albumDetail.tracks.length > 0) {
+      // 组装整盘曲目为播放队列
+      const queue = albumDetail.tracks.map((t) => ({
+        trackId: t.id,
+        title: t.title,
+        artist: albumDetail.artist,
+        album: albumDetail.title,
+        streamUrl: t.stream_url,
+        coverUrl: albumDetail.cover_url,
+      }))
+      
+      // 默认直接开播整张专辑的第一首
+      playerStore.playTrack(queue[0], queue)
+    }
+  } catch (error) {
+    handleApiError(error)
+  }
+}
+
+// 搜索曲目快捷开播 (支持在搜索到的 Tracks 之间连播)
 function playSearchTrack(track: TrackResult) {
-  playerTrack.value = {
+  const activeTrack = {
     trackId: track.id,
     title: track.title,
     artist: track.artist,
     album: track.album,
     streamUrl: track.stream_url,
+    coverUrl: '/api/v1/cover/' + track.album_id,
   }
+
+  const queue = searchResults.value.tracks.map((t) => ({
+    trackId: t.id,
+    title: t.title,
+    artist: t.artist,
+    album: t.album,
+    streamUrl: t.stream_url,
+    coverUrl: '/api/v1/cover/' + t.album_id,
+  }))
+
+  playerStore.playTrack(activeTrack, queue)
 }
 
 function logout() {
@@ -300,13 +373,13 @@ function logout() {
   api.setToken(null)
   selectedAlbum.value = null
   selectedArtist.value = null
-  playerTrack.value = null
+  playerStore.$reset() // 清空全局播放状态
 }
 
 function handleApiError(error: unknown) {
   if (error instanceof ApiError && error.status === 401) {
     logout()
-    loginError.value = 'Session expired. Sign in again.'
+    loginError.value = '登录会话已过期，请重新登录。'
     return
   }
   globalError.value = messageFromError(error)
@@ -314,7 +387,7 @@ function handleApiError(error: unknown) {
 
 function messageFromError(error: unknown) {
   if (error instanceof Error) return error.message
-  return 'Request failed'
+  return '请求服务失败，请检查网络或配置'
 }
 
 const showLogin = computed(() => !token.value && !anonymousAccess.value)

@@ -17,3 +17,7 @@ data/
 
 # Superpowers visual brainstorming 临时文件
 .superpowers/
+
+# 本地专属开发配置与音乐测试包
+/config.yaml
+/music/
