@@ -3,6 +3,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -35,6 +37,19 @@ func main() {
 	}
 	defer database.Close()
 
+	if cfg.Auth.Token == "" && !cfg.Auth.Disable {
+		b := make([]byte, 16)
+		if _, err := rand.Read(b); err != nil {
+			slog.Error("生成 token 失败", "err", err)
+			os.Exit(1)
+		}
+		cfg.Auth.Token = hex.EncodeToString(b)
+		slog.Info("已生成认证 Token（请在 config.yaml 中固化）", "token", cfg.Auth.Token)
+	}
+	if cfg.Auth.Password == "" && !cfg.Auth.Disable {
+		slog.Warn("auth.password 未设置，请在 config.yaml 中配置登录密码")
+	}
+
 	sc := scanner.NewScanner(database, cfg.Library)
 	if err := sc.Start(); err != nil {
 		slog.Error("启动扫描器失败", "err", err)
@@ -42,7 +57,7 @@ func main() {
 	}
 	defer sc.Stop()
 
-	router := api.NewRouter(sc)
+	router := api.NewRouter(sc, database, cfg)
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	srv := &http.Server{
 		Addr:         addr,

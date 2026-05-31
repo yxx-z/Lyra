@@ -7,6 +7,8 @@ server:
 auth:
   disable: false         # 内网纯信任环境可设为 true 关闭认证
   token: ""              # 留空时启动自动生成并写回配置文件
+  username: admin        # Web UI 登录用户名
+  password: ""           # Web UI 登录密码，留空时启动打印警告且拒绝登录
 
 library:
   paths:

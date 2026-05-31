@@ -2,32 +2,57 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"io/fs"
 	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/yxx-z/lyra/internal/api/middleware"
 	v1 "github.com/yxx-z/lyra/internal/api/v1"
+	"github.com/yxx-z/lyra/internal/config"
 	"github.com/yxx-z/lyra/internal/scanner"
 	"github.com/yxx-z/lyra/ui"
 )
 
 const version = "0.1.0"
 
-// NewRouter builds the application router. s must not be nil.
-func NewRouter(s *scanner.Scanner) http.Handler {
+// NewRouter builds the application router.
+func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
+	r.Use(chiMiddleware.Logger)
+	r.Use(chiMiddleware.Recoverer)
 
 	r.Get("/health", handleHealth)
 
-	lib := v1.NewLibraryHandler(s)
+	authH := v1.NewAuthHandler(cfg)
+	r.Post("/api/v1/auth/login", authH.Login)
+
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(middleware.BearerAuth(cfg.Auth.Token, cfg.Auth.Disable))
+
+		lib := v1.NewLibraryHandler(s)
 		r.Post("/library/scan", lib.TriggerScan)
 		r.Get("/library/scan/status", lib.ScanStatus)
+
+		albums := v1.NewAlbumsHandler(db)
+		r.Get("/albums", albums.ListAlbums)
+		r.Get("/albums/{id}", albums.GetAlbum)
+
+		artists := v1.NewArtistsHandler(db)
+		r.Get("/artists", artists.ListArtists)
+		r.Get("/artists/{id}", artists.GetArtist)
+
+		cover := v1.NewCoverHandler(db)
+		r.Get("/cover/{id}", cover.GetCover)
+
+		stream := v1.NewStreamHandler(db)
+		r.Get("/tracks/{id}/stream", stream.Stream)
+
+		search := v1.NewSearchHandler(db)
+		r.Get("/search", search.Search)
 	})
 
 	// 所有非 API 路由返回嵌入的前端文件

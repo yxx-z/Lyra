@@ -27,8 +27,10 @@ type ServerConfig struct {
 }
 
 type AuthConfig struct {
-	Disable bool   `yaml:"disable"`
-	Token   string `yaml:"token"`
+	Disable  bool   `yaml:"disable"`
+	Token    string `yaml:"token"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
 }
 
 type LibraryConfig struct {
@@ -90,7 +92,7 @@ type SubsonicConfig struct {
 func Default() *Config {
 	return &Config{
 		Server:   ServerConfig{Host: "0.0.0.0", Port: 4533},
-		Auth:     AuthConfig{Disable: false},
+		Auth:     AuthConfig{Disable: false, Username: "admin"},
 		Library:  LibraryConfig{ScanInterval: 3600, Watch: true},
 		Database: DatabaseConfig{Path: "./data/music.db"},
 		Cache:    CacheConfig{ArtworkDir: "./data/artwork", ArtworkMaxSizeMB: 2048},

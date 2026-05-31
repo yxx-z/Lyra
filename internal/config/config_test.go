@@ -48,3 +48,10 @@ func TestLoad_OverridesPort(t *testing.T) {
 		t.Errorf("期望端口 9090，实际 %d", cfg.Server.Port)
 	}
 }
+
+func TestDefault_AuthUsernameIsAdmin(t *testing.T) {
+	cfg := Default()
+	if cfg.Auth.Username != "admin" {
+		t.Errorf("want username=admin, got %q", cfg.Auth.Username)
+	}
+}
