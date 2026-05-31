@@ -74,3 +74,4 @@ CREATE INDEX idx_tracks_album         ON tracks(album_id);
 CREATE INDEX idx_tracks_artist        ON tracks(artist_id);
 CREATE INDEX idx_tracks_scrape_status ON tracks(scrape_status);
 CREATE INDEX idx_albums_artist        ON albums(artist_id);
+CREATE INDEX idx_tracks_available  ON tracks(is_available);
