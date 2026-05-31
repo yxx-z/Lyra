@@ -14,11 +14,11 @@
         @click="$emit('select', album.id)"
       >
         <img
-          v-if="album.cover_url"
+          v-if="album.cover_url && !brokenCovers.has(album.id)"
           :src="album.cover_url"
           alt=""
           class="album-cover"
-          @error="hideBrokenImage"
+          @error="markCoverBroken(album.id)"
         />
         <div v-else class="album-cover placeholder-cover">{{ initials(album.title) }}</div>
         <span class="album-title">{{ album.title }}</span>
@@ -29,6 +29,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import type { AlbumSummary } from '../api/client'
 
 defineProps<{
@@ -45,8 +46,9 @@ function initials(value: string) {
   return value.trim().slice(0, 2).toUpperCase() || 'LY'
 }
 
-function hideBrokenImage(event: Event) {
-  const image = event.target as HTMLImageElement
-  image.style.display = 'none'
+const brokenCovers = ref(new Set<string>())
+
+function markCoverBroken(id: string) {
+  brokenCovers.value = new Set([...brokenCovers.value, id])
 }
 </script>

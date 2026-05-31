@@ -27,11 +27,11 @@
             @click="$emit('select-album', album.id)"
           >
             <img
-              v-if="album.cover_url"
+              v-if="album.cover_url && !brokenCovers.has(album.id)"
               :src="album.cover_url"
               alt=""
               class="album-cover"
-              @error="hideBrokenImage"
+              @error="markCoverBroken(album.id)"
             />
             <div v-else class="album-cover placeholder-cover">
               {{ album.title.slice(0, 2).toUpperCase() }}
@@ -46,6 +46,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import type { ArtistDetail, ArtistSummary } from '../api/client'
 
 defineProps<{
@@ -58,8 +59,9 @@ defineEmits<{
   'select-album': [id: string]
 }>()
 
-function hideBrokenImage(event: Event) {
-  const image = event.target as HTMLImageElement
-  image.style.display = 'none'
+const brokenCovers = ref(new Set<string>())
+
+function markCoverBroken(id: string) {
+  brokenCovers.value = new Set([...brokenCovers.value, id])
 }
 </script>

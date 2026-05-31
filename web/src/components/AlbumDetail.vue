@@ -4,11 +4,11 @@
     <template v-else>
       <div class="detail-header">
         <img
-          v-if="album.cover_url"
+          v-if="album.cover_url && !coverBroken"
           :src="album.cover_url"
           alt=""
           class="detail-cover"
-          @error="hideBrokenImage"
+          @error="coverBroken = true"
         />
         <div v-else class="detail-cover placeholder-cover">
           {{ album.title.slice(0, 2).toUpperCase() }}
@@ -38,9 +38,10 @@
 </template>
 
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import type { AlbumDetail, TrackSummary } from '../api/client'
 
-defineProps<{
+const props = defineProps<{
   album: AlbumDetail | null
 }>()
 
@@ -55,8 +56,12 @@ function formatDuration(seconds: number) {
   return `${minutes}:${rest}`
 }
 
-function hideBrokenImage(event: Event) {
-  const image = event.target as HTMLImageElement
-  image.style.display = 'none'
-}
+const coverBroken = ref(false)
+
+watch(
+  () => props.album?.id,
+  () => {
+    coverBroken.value = false
+  },
+)
 </script>

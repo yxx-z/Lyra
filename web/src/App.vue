@@ -1,7 +1,7 @@
 <template>
   <n-config-provider :theme="darkTheme">
     <n-message-provider>
-      <LoginView v-if="!token" :loading="loginLoading" :error="loginError" @login="handleLogin" />
+      <LoginView v-if="showLogin" :loading="loginLoading" :error="loginError" @login="handleLogin" />
 
       <LibraryShell
         v-else
@@ -67,7 +67,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { NAlert, NConfigProvider, NMessageProvider, darkTheme } from 'naive-ui'
 import { ApiClient, ApiError, tokenStorage } from './api/client'
 import type {
@@ -92,6 +92,7 @@ import ScanPanel from './components/ScanPanel.vue'
 import SearchPanel from './components/SearchPanel.vue'
 
 const token = ref(tokenStorage.load())
+const anonymousAccess = ref(false)
 const api = new ApiClient(token.value)
 const mode = ref<ViewMode>('albums')
 const loginLoading = ref(false)
@@ -121,10 +122,27 @@ const scanTriggering = ref(false)
 const playerTrack = ref<PlayerTrack | null>(null)
 
 onMounted(() => {
-  if (token.value) {
-    void loadInitialData()
-  }
+  void boot()
 })
+
+async function boot() {
+  if (token.value) {
+    await loadInitialData()
+    return
+  }
+
+  try {
+    const response = await api.listAlbums()
+    albums.value = response.albums
+    anonymousAccess.value = true
+    await Promise.all([loadArtists(), loadScanStatus()])
+    if (response.albums[0]) {
+      await selectAlbum(response.albums[0].id)
+    }
+  } catch {
+    anonymousAccess.value = false
+  }
+}
 
 async function handleLogin(payload: { username: string; password: string }) {
   loginLoading.value = true
@@ -278,6 +296,7 @@ function playSearchTrack(track: TrackResult) {
 function logout() {
   tokenStorage.clear()
   token.value = null
+  anonymousAccess.value = false
   api.setToken(null)
   selectedAlbum.value = null
   selectedArtist.value = null
@@ -297,4 +316,6 @@ function messageFromError(error: unknown) {
   if (error instanceof Error) return error.message
   return 'Request failed'
 }
+
+const showLogin = computed(() => !token.value && !anonymousAccess.value)
 </script>
