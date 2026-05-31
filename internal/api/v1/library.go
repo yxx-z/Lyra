@@ -32,7 +32,9 @@ func (h *LibraryHandler) TriggerScan(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		if err2 := json.NewEncoder(w).Encode(map[string]string{"error": err.Error()}); err2 != nil {
+			slog.Error("写响应失败", "err", err2)
+		}
 		return
 	}
 	if err := json.NewEncoder(w).Encode(map[string]bool{"ok": true}); err != nil {
