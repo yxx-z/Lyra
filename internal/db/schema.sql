@@ -43,6 +43,7 @@ CREATE TABLE tracks (
     scrape_status  TEXT DEFAULT 'pending',
     play_count     INTEGER DEFAULT 0,
     last_played_at DATETIME,
+    is_available   INTEGER NOT NULL DEFAULT 1,
     created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP
 );

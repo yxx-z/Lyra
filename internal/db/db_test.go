@@ -41,3 +41,19 @@ func TestOpen_IdempotentMigrations(t *testing.T) {
 	}
 	db2.Close()
 }
+
+func TestOpen_TracksHasIsAvailableColumn(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer db.Close()
+
+	// 若列不存在，INSERT 会失败
+	_, err = db.Exec(
+		`INSERT INTO tracks(id,title,file_path,is_available) VALUES('x','t','p',1)`,
+	)
+	if err != nil {
+		t.Errorf("is_available 列不存在: %v", err)
+	}
+}
