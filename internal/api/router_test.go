@@ -6,10 +6,25 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/yxx-z/lyra/internal/config"
+	"github.com/yxx-z/lyra/internal/db"
+	"github.com/yxx-z/lyra/internal/scanner"
 )
 
+func newTestRouter(t *testing.T) http.Handler {
+	t.Helper()
+	d, err := db.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	s := scanner.NewScanner(d, config.LibraryConfig{})
+	return NewRouter(s)
+}
+
 func TestHealth_Returns200WithStatusOK(t *testing.T) {
-	r := NewRouter()
+	r := newTestRouter(t)
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)

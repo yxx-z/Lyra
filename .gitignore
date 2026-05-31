@@ -1,6 +1,6 @@
 # Go 构建产物
 lyra
-server
+/server
 
 # 前端构建产物（由 make build-frontend 重新生成）
 ui/dist/

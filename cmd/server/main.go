@@ -15,6 +15,7 @@ import (
 	"github.com/yxx-z/lyra/internal/api"
 	"github.com/yxx-z/lyra/internal/config"
 	"github.com/yxx-z/lyra/internal/db"
+	"github.com/yxx-z/lyra/internal/scanner"
 )
 
 func main() {
@@ -34,7 +35,14 @@ func main() {
 	}
 	defer database.Close()
 
-	router := api.NewRouter()
+	sc := scanner.NewScanner(database, cfg.Library)
+	if err := sc.Start(); err != nil {
+		slog.Error("启动扫描器失败", "err", err)
+		os.Exit(1)
+	}
+	defer sc.Stop()
+
+	router := api.NewRouter(sc)
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	srv := &http.Server{
 		Addr:         addr,
