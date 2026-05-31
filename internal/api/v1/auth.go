@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/yxx-z/lyra/internal/config"
 )
+
+const AuthCookieName = "lyra_auth"
 
 // AuthHandler handles /api/v1/auth/* endpoints.
 type AuthHandler struct {
@@ -33,10 +36,51 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "用户名或密码错误")
 		return
 	}
+	setAuthCookie(w, h.cfg.Auth.Token)
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]string{"token": h.cfg.Auth.Token}); err != nil {
 		slog.Error("写响应失败", "err", err)
 	}
+}
+
+// Logout handles POST /api/v1/auth/logout.
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	clearAuthCookie(w)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]bool{"ok": true}); err != nil {
+		slog.Error("写响应失败", "err", err)
+	}
+}
+
+// Session refreshes browser cookie auth after the request passes middleware auth.
+func (h *AuthHandler) Session(w http.ResponseWriter, r *http.Request) {
+	setAuthCookie(w, h.cfg.Auth.Token)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]bool{"ok": true}); err != nil {
+		slog.Error("写响应失败", "err", err)
+	}
+}
+
+func setAuthCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     AuthCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func clearAuthCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     AuthCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+	})
 }
 
 func writeJSONError(w http.ResponseWriter, status int, message string) {

@@ -20,6 +20,17 @@ func TestBearerAuth_ValidToken(t *testing.T) {
 	}
 }
 
+func TestBearerAuth_ValidCookie(t *testing.T) {
+	h := BearerAuth("secret", false)(http.HandlerFunc(okHandler))
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{Name: "lyra_auth", Value: "secret"})
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("want 200, got %d", w.Code)
+	}
+}
+
 func TestBearerAuth_InvalidToken(t *testing.T) {
 	h := BearerAuth("secret", false)(http.HandlerFunc(okHandler))
 	req := httptest.NewRequest(http.MethodGet, "/", nil)

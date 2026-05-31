@@ -116,6 +116,18 @@ export class ApiClient {
     return data.token
   }
 
+  async logout() {
+    await this.request<{ ok: boolean }>('/api/v1/auth/logout', {
+      method: 'POST',
+      auth: false,
+    })
+    this.token = null
+  }
+
+  refreshSession() {
+    return this.request<{ ok: boolean }>('/api/v1/auth/session', { method: 'POST' })
+  }
+
   listAlbums() {
     return this.request<{ albums: AlbumSummary[] }>('/api/v1/albums')
   }

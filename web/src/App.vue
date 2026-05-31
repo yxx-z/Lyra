@@ -14,7 +14,7 @@
       :mode="mode"
       @change-mode="changeMode"
       @refresh="refreshCurrentView"
-      @logout="logout"
+      @logout="void logout()"
       @search="runSearch"
     >
       <!-- 高品质手写浮动 Alert 提示栏 -->
@@ -154,7 +154,12 @@ onMounted(() => {
 
 async function boot() {
   if (token.value) {
-    await loadInitialData()
+    try {
+      await api.refreshSession()
+      await loadInitialData()
+    } catch (error) {
+      handleApiError(error)
+    }
     return
   }
 
@@ -366,7 +371,12 @@ function playSearchTrack(track: TrackResult) {
   playerStore.playTrack(activeTrack, queue)
 }
 
-function logout() {
+async function logout() {
+  try {
+    await api.logout()
+  } catch {
+    // Local logout should still clear UI state if the server is unreachable.
+  }
   tokenStorage.clear()
   token.value = null
   anonymousAccess.value = false
@@ -378,7 +388,7 @@ function logout() {
 
 function handleApiError(error: unknown) {
   if (error instanceof ApiError && error.status === 401) {
-    logout()
+    void logout()
     loginError.value = '登录会话已过期，请重新登录。'
     return
   }

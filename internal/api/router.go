@@ -29,9 +29,12 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 
 	authH := v1.NewAuthHandler(cfg)
 	r.Post("/api/v1/auth/login", authH.Login)
+	r.Post("/api/v1/auth/logout", authH.Logout)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(middleware.BearerAuth(cfg.Auth.Token, cfg.Auth.Disable))
+
+		r.Post("/auth/session", authH.Session)
 
 		lib := v1.NewLibraryHandler(s)
 		r.Post("/library/scan", lib.TriggerScan)
