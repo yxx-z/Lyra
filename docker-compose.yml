@@ -1,0 +1,12 @@
+services:
+  lyra:
+    image: lyra:latest
+    build: .
+    ports:
+      - "4533:4533"
+    volumes:
+      - /your/music:/music:ro
+      - ./data:/app/data
+    environment:
+      - LIBRARY_PATHS=/music
+    restart: unless-stopped
