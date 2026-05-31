@@ -230,7 +230,7 @@ CREATE TABLE lyrics (
     updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 播放队列 / 收藏（v1.1 扩展）
+-- 播放队列 / 收藏（v0.4）
 CREATE TABLE playlists (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL,
@@ -418,6 +418,10 @@ server:
   port: 4533
   base_url: ""           # 反向代理时设置，如 /music
 
+auth:
+  disable: false         # 内网纯信任环境可设为 true 关闭认证
+  token: ""              # 留空时启动自动生成并写回配置文件
+
 library:
   paths:
     - /music
@@ -452,7 +456,7 @@ transcode:
 
 subsonic:
   enabled: true
-  # Subsonic API 使用独立密码（安全隔离）
+  password: ""           # Subsonic 客户端使用的独立密码（与管理 Token 隔离）
 ```
 
 ---
@@ -465,6 +469,7 @@ subsonic:
 - [ ] SQLite 存储
 - [ ] Subsonic API 核心端点（浏览 + 流媒体）
 - [ ] 基础 Web UI（列表 + 播放器）
+- [ ] Dockerfile + docker-compose（单架构 amd64）
 
 ### v0.2 — 刮削
 
@@ -476,7 +481,7 @@ subsonic:
 
 - [ ] AcoustID 指纹识别
 - [ ] 网易云 API 适配（元数据 + 封面 + 歌词）
-- [ ] YRC 逐字歌词渲染
+- [ ] YRC 逐字歌词渲染（随网易云 API 同期）
 - [ ] 用户修正元数据 UI（管理页候选项确认）
 - [ ] fsnotify 实时文件监听 + 扫描进度 API
 
@@ -487,7 +492,7 @@ subsonic:
 - [ ] 移动端 Web UI 优化
 - [ ] 转码码率选择 UI
 - [ ] 库状态管理页（格式占比、刮削状态）
-- [ ] Docker 镜像 + ARM64 支持
+- [ ] ARM64 多架构镜像发布（amd64 + arm64）
 
 ### v1.0 — 稳定发布
 
@@ -520,7 +525,7 @@ CMD ["lyra"]
 # docker-compose.yml
 services:
   music-server:
-    image: music-server:latest
+    image: lyra:latest
     ports:
       - "4533:4533"
     volumes:
@@ -533,7 +538,7 @@ services:
 ### 二进制直接运行
 
 ```bash
-./music-server --config config.yaml
+./lyra --config config.yaml
 ```
 
 ---
