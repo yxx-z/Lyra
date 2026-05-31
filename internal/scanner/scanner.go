@@ -182,8 +182,3 @@ func (s *Scanner) doScan() {
 	}
 }
 
-// startWatcher is implemented in watcher.go (task 7).
-// This stub satisfies compilation until task 7 is done.
-func startWatcher(s *Scanner) error {
-	return nil
-}
