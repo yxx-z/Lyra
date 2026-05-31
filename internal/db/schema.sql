@@ -38,7 +38,7 @@ CREATE TABLE tracks (
     bitrate        INTEGER,
     sample_rate    INTEGER,
     channels       INTEGER,
-    mbid           TEXT,
+    mbid           TEXT UNIQUE,
     acoustid       TEXT,
     scrape_status  TEXT DEFAULT 'pending',
     play_count     INTEGER DEFAULT 0,

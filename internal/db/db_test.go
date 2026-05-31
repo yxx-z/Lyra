@@ -11,15 +11,18 @@ func TestOpen_CreatesTablesOnFirstRun(t *testing.T) {
 	}
 	defer db.Close()
 
-	var count int
-	row := db.QueryRow(
-		`SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ('artists','albums','tracks','lyrics')`,
-	)
-	if err := row.Scan(&count); err != nil {
-		t.Fatalf("查询失败: %v", err)
-	}
-	if count != 4 {
-		t.Errorf("期望 4 张核心表，实际 %d", count)
+	tables := []string{"artists", "albums", "tracks", "lyrics", "playlists", "playlist_tracks"}
+	for _, table := range tables {
+		var count int
+		err := db.QueryRow(
+			`SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?`, table,
+		).Scan(&count)
+		if err != nil {
+			t.Fatalf("查询表 %s 失败: %v", table, err)
+		}
+		if count != 1 {
+			t.Errorf("期望表 %s 存在，实际未找到", table)
+		}
 	}
 }
 

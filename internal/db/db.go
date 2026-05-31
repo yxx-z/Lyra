@@ -25,13 +25,23 @@ func Open(path string) (*sql.DB, error) {
 			}
 		}
 	}
-	db, err := sql.Open("sqlite", path)
+	dsn := path
+	if path != ":memory:" {
+		dsn = path + "?_pragma=foreign_keys%3DON"
+	}
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("打开 SQLite: %w", err)
 	}
-	if _, err := db.Exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;`); err != nil {
+	var journalMode string
+	if err := db.QueryRow(`PRAGMA journal_mode=WAL`).Scan(&journalMode); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("设置 PRAGMA: %w", err)
+		return nil, fmt.Errorf("设置 WAL 模式: %w", err)
+	}
+	// :memory: 不支持 WAL，忽略；文件数据库若无法设为 WAL 则记录警告
+	if path != ":memory:" && journalMode != "wal" {
+		db.Close()
+		return nil, fmt.Errorf("无法启用 WAL 模式，当前模式: %s（网络文件系统不支持 WAL）", journalMode)
 	}
 	if err := runMigrations(db); err != nil {
 		db.Close()
@@ -54,7 +64,9 @@ func runMigrations(db *sql.DB) error {
 			continue
 		}
 		var applied int
-		db.QueryRow(`SELECT count(*) FROM schema_migrations WHERE version=?`, e.Name()).Scan(&applied)
+		if err := db.QueryRow(`SELECT count(*) FROM schema_migrations WHERE version=?`, e.Name()).Scan(&applied); err != nil {
+			return fmt.Errorf("查询迁移状态 %s: %w", e.Name(), err)
+		}
 		if applied > 0 {
 			continue
 		}
@@ -62,11 +74,20 @@ func runMigrations(db *sql.DB) error {
 		if err != nil {
 			return err
 		}
-		if _, err := db.Exec(string(content)); err != nil {
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("开启事务 %s: %w", e.Name(), err)
+		}
+		if _, err := tx.Exec(string(content)); err != nil {
+			tx.Rollback()
 			return fmt.Errorf("应用迁移 %s: %w", e.Name(), err)
 		}
-		if _, err := db.Exec(`INSERT INTO schema_migrations(version) VALUES(?)`, e.Name()); err != nil {
-			return err
+		if _, err := tx.Exec(`INSERT INTO schema_migrations(version) VALUES(?)`, e.Name()); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("记录迁移版本 %s: %w", e.Name(), err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("提交迁移 %s: %w", e.Name(), err)
 		}
 	}
 	return nil
