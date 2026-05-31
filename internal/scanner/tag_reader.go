@@ -174,12 +174,18 @@ func cleanAlbumName(s string) string {
 	return strings.TrimSpace(s)
 }
 
+var reNumOnly = regexp.MustCompile(`^(\d+)$`)
+
 func parseTrackNumber(filename string) int {
 	name := strings.TrimSuffix(filename, filepath.Ext(filename))
-	m := reTrackNo.FindStringSubmatch(name)
-	if len(m) < 2 {
-		return 0
+	if m := reTrackNo.FindStringSubmatch(name); len(m) >= 2 {
+		n, _ := strconv.Atoi(m[1])
+		return n
 	}
-	n, _ := strconv.Atoi(m[1])
-	return n
+	// 兜底：文件名去扩展名后纯为数字（如 "01.flac"）
+	if m := reNumOnly.FindStringSubmatch(name); len(m) >= 2 {
+		n, _ := strconv.Atoi(m[1])
+		return n
+	}
+	return 0
 }
