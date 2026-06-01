@@ -60,7 +60,12 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 		r.Put("/tracks/{id}/lyrics", lyrics.PutLyrics)
 		r.Delete("/tracks/{id}/lyrics", lyrics.DeleteLyrics)
 
-		scrape := v1.NewScrapeHandler(db, lyricspkg.NewLRCLIBClient("https://lrclib.net", cfg.Scraper.MusicBrainz.UserAgent, nil))
+		lyricsService := lyricspkg.NewLyricsService(
+			db,
+			lyricspkg.NewEmbeddedProvider(),
+			lyricspkg.NewLRCLIBClient("https://lrclib.net", cfg.Scraper.MusicBrainz.UserAgent, nil),
+		)
+		scrape := v1.NewScrapeHandler(lyricsService)
 		r.Post("/tracks/{id}/scrape", scrape.ScrapeTrack)
 
 		search := v1.NewSearchHandler(db)
