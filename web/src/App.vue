@@ -93,7 +93,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { usePlayerStore } from './stores/player'
 import { ApiClient, ApiError, tokenStorage } from './api/client'
 import type {
@@ -147,9 +147,30 @@ const scanStatus = reactive<ScanStatus>({
   started_at: '',
 })
 const scanTriggering = ref(false)
+let scanPollTimer: ReturnType<typeof setInterval> | null = null
+
+// 扫描在后台异步运行，需持续轮询状态直到 running 变为 false。
+// startScanPolling 幂等：已在轮询时不重复创建定时器。
+function startScanPolling() {
+  if (scanPollTimer !== null) return
+  scanPollTimer = setInterval(() => {
+    void loadScanStatus()
+  }, 1000)
+}
+
+function stopScanPolling() {
+  if (scanPollTimer !== null) {
+    clearInterval(scanPollTimer)
+    scanPollTimer = null
+  }
+}
 
 onMounted(() => {
   void boot()
+})
+
+onUnmounted(() => {
+  stopScanPolling()
 })
 
 async function boot() {
@@ -267,6 +288,12 @@ function closeSearch() {
 async function loadScanStatus() {
   try {
     Object.assign(scanStatus, await api.getScanStatus())
+    // 扫描进行中则持续轮询，结束后停止——避免 UI 冻结在早期快照。
+    if (scanStatus.running) {
+      startScanPolling()
+    } else {
+      stopScanPolling()
+    }
   } catch (error) {
     handleApiError(error)
   }
