@@ -1466,9 +1466,9 @@ button {
 }
 
 .lyrics-close-btn {
-  position: absolute;
+  position: fixed;
   top: 32px; right: 32px;
-  z-index: 10;
+  z-index: 600;
   width: 44px; height: 44px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.05);
