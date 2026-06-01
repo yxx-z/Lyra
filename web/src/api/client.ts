@@ -82,7 +82,17 @@ export type PlayerTrack = {
 }
 
 export type LyricsResponse = {
+  track_id: string
   lrc_content: string
+  yrc_content: string
+  source: string
+  updated_at: string
+  has_lrc: boolean
+  has_yrc: boolean
+}
+
+export type LyricsPayload = {
+  lrc_content?: string
   yrc_content?: string
   source?: string
 }
@@ -166,6 +176,20 @@ export class ApiClient {
     return this.request<LyricsResponse>(`/api/v1/tracks/${encodeURIComponent(trackId)}/lyrics`)
   }
 
+  saveLyrics(trackId: string, payload: LyricsPayload) {
+    return this.request<LyricsResponse>(`/api/v1/tracks/${encodeURIComponent(trackId)}/lyrics`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  deleteLyrics(trackId: string) {
+    return this.request<void>(`/api/v1/tracks/${encodeURIComponent(trackId)}/lyrics`, {
+      method: 'DELETE',
+    })
+  }
+
   private async request<T>(
     path: string,
     options: RequestInit & { auth?: boolean } = {},
@@ -193,7 +217,12 @@ export class ApiClient {
       throw new ApiError(response.status, message)
     }
 
-    return (await response.json()) as T
+    if (response.status === 204) {
+      return undefined as T
+    }
+
+    const text = await response.text()
+    return (text ? JSON.parse(text) : undefined) as T
   }
 }
 

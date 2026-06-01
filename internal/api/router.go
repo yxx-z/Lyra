@@ -54,6 +54,11 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 		stream := v1.NewStreamHandler(db, cfg.Transcode, cfg.Cache.TranscodeDir)
 		r.Get("/tracks/{id}/stream", stream.Stream)
 
+		lyrics := v1.NewLyricsHandler(db)
+		r.Get("/tracks/{id}/lyrics", lyrics.GetLyrics)
+		r.Put("/tracks/{id}/lyrics", lyrics.PutLyrics)
+		r.Delete("/tracks/{id}/lyrics", lyrics.DeleteLyrics)
+
 		search := v1.NewSearchHandler(db)
 		r.Get("/search", search.Search)
 	})
