@@ -3,9 +3,8 @@ package v1
 
 import (
 	"database/sql"
-	"io"
-	"log/slog"
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -25,24 +24,26 @@ var audioContentTypes = map[string]string{
 type StreamHandler struct {
 	db        *sql.DB
 	transcode config.TranscodeConfig
+	cache     *TranscodeCache
 }
 
-// NewStreamHandler creates a StreamHandler backed by db.
-func NewStreamHandler(db *sql.DB, transcode ...config.TranscodeConfig) *StreamHandler {
-	cfg := config.Default().Transcode
-	if len(transcode) > 0 {
-		cfg = transcode[0]
+// NewStreamHandler creates a StreamHandler backed by db, using transcode config
+// and a disk cache rooted at cacheDir.
+func NewStreamHandler(db *sql.DB, transcode config.TranscodeConfig, cacheDir string) *StreamHandler {
+	if transcode.FFmpegPath == "" {
+		transcode.FFmpegPath = "ffmpeg"
 	}
-	if cfg.FFmpegPath == "" {
-		cfg.FFmpegPath = "ffmpeg"
+	if transcode.DefaultFormat == "" {
+		transcode.DefaultFormat = "mp3"
 	}
-	if cfg.DefaultFormat == "" {
-		cfg.DefaultFormat = "mp3"
+	if transcode.DefaultBitrate == 0 {
+		transcode.DefaultBitrate = 192
 	}
-	if cfg.DefaultBitrate == 0 {
-		cfg.DefaultBitrate = 192
+	return &StreamHandler{
+		db:        db,
+		transcode: transcode,
+		cache:     NewTranscodeCache(cacheDir),
 	}
-	return &StreamHandler{db: db, transcode: cfg}
 }
 
 // Stream handles GET /api/v1/tracks/:id/stream.
@@ -68,14 +69,50 @@ func (h *StreamHandler) stream(w http.ResponseWriter, r *http.Request, trackID s
 		return
 	}
 
-	h.transcodeToMP3(w, r, filePath)
+	h.serveTranscoded(w, r, trackID, filePath)
 }
 
-func (h *StreamHandler) transcodeToMP3(w http.ResponseWriter, r *http.Request, filePath string) {
+// serveTranscoded serves an mp3 transcode of filePath, caching the result to
+// disk so subsequent requests (and Range/seek) are served via http.ServeFile.
+func (h *StreamHandler) serveTranscoded(w http.ResponseWriter, r *http.Request, trackID, filePath string) {
 	bitrate := h.transcode.DefaultBitrate
-	if bitrate <= 0 {
-		bitrate = 192
+	cachePath := h.cache.Path(trackID, "mp3", bitrate)
+	key := h.cache.key(trackID, "mp3", bitrate)
+
+	// 命中缓存：直接 ServeFile（自带 Range）
+	if _, err := os.Stat(cachePath); err == nil {
+		w.Header().Set("Content-Type", "audio/mpeg")
+		http.ServeFile(w, r, cachePath)
+		return
 	}
+
+	// 未命中：加锁转码（同一曲目并发请求只转一次）
+	lock := h.cache.lockFor(key)
+	lock.Lock()
+	// double-check：可能其他请求已转好
+	if _, err := os.Stat(cachePath); err != nil {
+		if terr := h.transcodeToFile(r, filePath, cachePath, bitrate); terr != nil {
+			lock.Unlock()
+			if r.Context().Err() != nil {
+				return // 客户端断开
+			}
+			writeJSONError(w, http.StatusInternalServerError, "转码失败")
+			return
+		}
+	}
+	lock.Unlock()
+
+	w.Header().Set("Content-Type", "audio/mpeg")
+	http.ServeFile(w, r, cachePath)
+}
+
+// transcodeToFile transcodes filePath to mp3 at the given bitrate, writing to a
+// temp file then atomically renaming to dst. A failed run cleans up the temp file.
+func (h *StreamHandler) transcodeToFile(r *http.Request, filePath, dst string, bitrate int) error {
+	if err := os.MkdirAll(h.cache.dir, 0o755); err != nil {
+		return err
+	}
+	tmp := dst + ".tmp"
 
 	cmd := exec.CommandContext(
 		r.Context(),
@@ -87,28 +124,16 @@ func (h *StreamHandler) transcodeToMP3(w http.ResponseWriter, r *http.Request, f
 		"-codec:a", "libmp3lame",
 		"-b:a", strconv.Itoa(bitrate)+"k",
 		"-f", "mp3",
-		"pipe:1",
+		"-y",
+		tmp,
 	)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "转码启动失败")
-		return
+	if err := cmd.Run(); err != nil {
+		os.Remove(tmp)
+		return err
 	}
-	if err := cmd.Start(); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "转码启动失败")
-		return
+	if err := os.Rename(tmp, dst); err != nil {
+		os.Remove(tmp)
+		return err
 	}
-
-	w.Header().Set("Content-Type", "audio/mpeg")
-	w.Header().Set("Cache-Control", "no-store")
-	if _, err := io.Copy(w, stdout); err != nil {
-		slog.Warn("转码流写入失败", "err", err)
-	}
-	if err := cmd.Wait(); err != nil {
-		if r.Context().Err() != nil {
-			slog.Debug("客户端已停止读取转码流", "err", err)
-			return
-		}
-		slog.Warn("ffmpeg 转码失败", "err", err)
-	}
+	return nil
 }
