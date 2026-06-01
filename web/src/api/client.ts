@@ -97,6 +97,13 @@ export type LyricsPayload = {
   source?: string
 }
 
+export type ScrapeResponse = {
+  track_id: string
+  status: string
+  source?: string
+  message?: string
+}
+
 export class ApiError extends Error {
   status: number
 
@@ -187,6 +194,12 @@ export class ApiClient {
   deleteLyrics(trackId: string) {
     return this.request<void>(`/api/v1/tracks/${encodeURIComponent(trackId)}/lyrics`, {
       method: 'DELETE',
+    })
+  }
+
+  scrapeTrack(trackId: string) {
+    return this.request<ScrapeResponse>(`/api/v1/tracks/${encodeURIComponent(trackId)}/scrape`, {
+      method: 'POST',
     })
   }
 
