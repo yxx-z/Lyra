@@ -50,7 +50,7 @@ func main() {
 		slog.Warn("auth.password 未设置，请在 config.yaml 中配置登录密码")
 	}
 
-	sc := scanner.NewScanner(database, cfg.Library)
+	sc := scanner.NewScanner(database, cfg.Library, cfg.Transcode.FfprobePath)
 	if err := sc.Start(); err != nil {
 		slog.Error("启动扫描器失败", "err", err)
 		os.Exit(1)

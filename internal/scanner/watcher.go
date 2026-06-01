@@ -94,7 +94,7 @@ func handleFSEvent(s *Scanner, db *debouncer, event fsnotify.Event) {
 		return
 	}
 	db.trigger(path, func() {
-		meta, err := Read(path, s.cfg.Paths)
+		meta, err := Read(path, s.cfg.Paths, s.ffprobePath)
 		if err != nil {
 			return
 		}

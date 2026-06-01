@@ -20,7 +20,7 @@ func newTestScanner(t *testing.T, paths []string) *Scanner {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	return NewScanner(d, config.LibraryConfig{Paths: paths})
+	return NewScanner(d, config.LibraryConfig{Paths: paths}, "")
 }
 
 func TestNewScanner_NotRunning(t *testing.T) {

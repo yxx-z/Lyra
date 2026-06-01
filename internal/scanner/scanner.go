@@ -26,9 +26,10 @@ type ScanStatus struct {
 
 // Scanner orchestrates directory walking, tag reading, and DB ingestion.
 type Scanner struct {
-	db  *sql.DB
-	cfg config.LibraryConfig
-	ing *Ingester
+	db          *sql.DB
+	cfg         config.LibraryConfig
+	ing         *Ingester
+	ffprobePath string
 
 	running   atomic.Bool
 	total     atomic.Int64
@@ -45,12 +46,13 @@ type Scanner struct {
 }
 
 // NewScanner creates a Scanner. Call Start to begin scanning.
-func NewScanner(db *sql.DB, cfg config.LibraryConfig) *Scanner {
+func NewScanner(db *sql.DB, cfg config.LibraryConfig, ffprobePath string) *Scanner {
 	return &Scanner{
-		db:     db,
-		cfg:    cfg,
-		ing:    NewIngester(db),
-		stopCh: make(chan struct{}),
+		db:          db,
+		cfg:         cfg,
+		ing:         NewIngester(db),
+		ffprobePath: ffprobePath,
+		stopCh:      make(chan struct{}),
 	}
 }
 
@@ -158,7 +160,7 @@ func (s *Scanner) doScan() {
 			defer workerWg.Done()
 			for path := range paths {
 				s.total.Add(1)
-				meta, err := Read(path, s.cfg.Paths)
+				meta, err := Read(path, s.cfg.Paths, s.ffprobePath)
 				results <- result{meta, err}
 			}
 		}()
