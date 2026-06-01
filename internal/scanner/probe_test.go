@@ -1,7 +1,12 @@
 // internal/scanner/probe_test.go
 package scanner
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
 
 func TestParseProbeOutput_FullData(t *testing.T) {
 	jsonOut := `{
@@ -48,5 +53,30 @@ func TestProbe_FfprobeNotFound(t *testing.T) {
 	_, err := Probe("/nonexistent/ffprobe", "/tmp/whatever.mp3")
 	if err == nil {
 		t.Error("want error when ffprobe binary missing")
+	}
+}
+
+func TestProbe_TimeoutReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	// 假 ffprobe：exec 成单进程 sleep（真实模拟单进程的 ffprobe 卡住，
+	// 无孙进程持有管道），被 SIGKILL 后管道立即关闭。
+	fake := filepath.Join(dir, "ffprobe")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\nexec sleep 30\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	// 把超时压到 200ms，断言 Probe 不会一直等
+	old := probeTimeout
+	probeTimeout = 200 * time.Millisecond
+	defer func() { probeTimeout = old }()
+
+	start := time.Now()
+	_, err := Probe(fake, filepath.Join(dir, "whatever.mp3"))
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Error("want error when ffprobe exceeds timeout")
+	}
+	if elapsed > 2*time.Second {
+		t.Errorf("Probe waited %v, should have timed out near 200ms", elapsed)
 	}
 }

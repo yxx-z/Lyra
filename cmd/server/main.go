@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -38,13 +40,25 @@ func main() {
 	defer database.Close()
 
 	if cfg.Auth.Token == "" && !cfg.Auth.Disable {
-		b := make([]byte, 16)
-		if _, err := rand.Read(b); err != nil {
-			slog.Error("生成 token 失败", "err", err)
-			os.Exit(1)
+		// config.yaml 通常以只读挂载，无法写回；改为持久化到可写的数据目录，
+		// 使 token 在容器/进程重启后保持稳定，避免每次重启都让浏览器会话失效。
+		tokenPath := filepath.Join(filepath.Dir(cfg.Database.Path), ".auth_token")
+		if data, rerr := os.ReadFile(tokenPath); rerr == nil && strings.TrimSpace(string(data)) != "" {
+			cfg.Auth.Token = strings.TrimSpace(string(data))
+			slog.Info("已从数据目录加载持久化认证 Token", "path", tokenPath)
+		} else {
+			b := make([]byte, 16)
+			if _, err := rand.Read(b); err != nil {
+				slog.Error("生成 token 失败", "err", err)
+				os.Exit(1)
+			}
+			cfg.Auth.Token = hex.EncodeToString(b)
+			if werr := os.WriteFile(tokenPath, []byte(cfg.Auth.Token), 0o600); werr != nil {
+				slog.Warn("持久化 Token 失败，重启后会话将失效", "path", tokenPath, "err", werr)
+			} else {
+				slog.Info("已生成并持久化认证 Token", "path", tokenPath)
+			}
 		}
-		cfg.Auth.Token = hex.EncodeToString(b)
-		slog.Info("已生成认证 Token（请在 config.yaml 中固化）", "token", cfg.Auth.Token)
 	}
 	if cfg.Auth.Password == "" && !cfg.Auth.Disable {
 		slog.Warn("auth.password 未设置，请在 config.yaml 中配置登录密码")

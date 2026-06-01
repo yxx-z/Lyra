@@ -943,8 +943,11 @@ button {
   display: inline-block;
   width: 18px;
   height: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
+  /* 用 currentColor 跟随按钮前景色（播放按钮前景为深色），
+     避免白色 spinner 画在白色按钮上完全看不见 */
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-right-color: currentColor;
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }

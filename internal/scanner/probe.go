@@ -2,11 +2,17 @@
 package scanner
 
 import (
+	"context"
 	"encoding/json"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
+
+// probeTimeout bounds how long a single ffprobe invocation may run, so a
+// hung/pathological file cannot wedge a scan worker forever. Overridable in tests.
+var probeTimeout = 30 * time.Second
 
 // AudioProps holds audio properties extracted via ffprobe.
 type AudioProps struct {
@@ -20,13 +26,19 @@ type AudioProps struct {
 // Returns an error if ffprobe is unavailable or fails; callers should
 // degrade to zero values without aborting the scan.
 func Probe(ffprobePath, filePath string) (AudioProps, error) {
-	cmd := exec.Command(
+	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(
+		ctx,
 		ffprobePath,
 		"-v", "error",
 		"-print_format", "json",
 		"-show_entries", "format=duration,bit_rate:stream=sample_rate,channels",
 		filePath,
 	)
+	// 超时/取消后，即便有残留子进程仍持有 I/O 管道，也在宽限期后强制关闭管道返回，
+	// 防止 cmd.Output() 永久阻塞。
+	cmd.WaitDelay = 5 * time.Second
 	out, err := cmd.Output()
 	if err != nil {
 		return AudioProps{}, err
