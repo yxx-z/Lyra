@@ -13,6 +13,7 @@ import (
 	"github.com/yxx-z/lyra/internal/api/middleware"
 	v1 "github.com/yxx-z/lyra/internal/api/v1"
 	"github.com/yxx-z/lyra/internal/config"
+	lyricspkg "github.com/yxx-z/lyra/internal/lyrics"
 	"github.com/yxx-z/lyra/internal/scanner"
 	"github.com/yxx-z/lyra/ui"
 )
@@ -53,6 +54,14 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 
 		stream := v1.NewStreamHandler(db, cfg.Transcode, cfg.Cache.TranscodeDir)
 		r.Get("/tracks/{id}/stream", stream.Stream)
+
+		lyrics := v1.NewLyricsHandler(db)
+		r.Get("/tracks/{id}/lyrics", lyrics.GetLyrics)
+		r.Put("/tracks/{id}/lyrics", lyrics.PutLyrics)
+		r.Delete("/tracks/{id}/lyrics", lyrics.DeleteLyrics)
+
+		scrape := v1.NewScrapeHandler(db, lyricspkg.NewLRCLIBClient("https://lrclib.net", cfg.Scraper.MusicBrainz.UserAgent, nil))
+		r.Post("/tracks/{id}/scrape", scrape.ScrapeTrack)
 
 		search := v1.NewSearchHandler(db)
 		r.Get("/search", search.Search)

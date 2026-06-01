@@ -82,7 +82,7 @@
 <script setup lang="ts">
 import { ref, watch, computed, nextTick } from 'vue'
 import { usePlayerStore } from '../stores/player'
-import type { ApiClient } from '../api/client'
+import { ApiError, type ApiClient } from '../api/client'
 
 // 约定 LRC 解析的单行歌词数据接口
 interface LyricLine {
@@ -150,13 +150,15 @@ async function loadLyrics() {
 
   try {
     const res = await props.api.getLyrics(track.trackId)
-    if (res && res.lrc_content) {
+    if (res.has_lrc && res.lrc_content) {
       lrcLines.value = parseLrc(res.lrc_content)
     } else {
       error.value = 'no_lyrics'
     }
   } catch (err) {
-    console.warn('Lyrics fetch failed or 404. Gracefully showing pure-instrumental mock layout: ', err)
+    if (!(err instanceof ApiError && err.status === 404)) {
+      console.warn('Lyrics fetch failed. Gracefully showing no-lyrics layout: ', err)
+    }
     error.value = 'no_lyrics'
   } finally {
     isLoading.value = false

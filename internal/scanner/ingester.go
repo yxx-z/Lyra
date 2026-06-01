@@ -3,7 +3,10 @@ package scanner
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -41,7 +44,14 @@ func (ing *Ingester) Ingest(meta TrackMeta) error {
 		return fmt.Errorf("album: %w", err)
 	}
 
-	return ing.upsertTrack(meta, trackArtistID, albumID)
+	trackID, err := ing.upsertTrack(meta, trackArtistID, albumID)
+	if err != nil {
+		return err
+	}
+	if err := ing.importSidecarLyrics(trackID, meta.FilePath); err != nil {
+		return fmt.Errorf("lyrics: %w", err)
+	}
+	return nil
 }
 
 // MarkUnavailable sets is_available=0 for the track at filePath.
@@ -104,7 +114,7 @@ func (ing *Ingester) findOrCreateAlbum(title, artistID string, year int) (string
 	return id, err
 }
 
-func (ing *Ingester) upsertTrack(meta TrackMeta, artistID, albumID string) error {
+func (ing *Ingester) upsertTrack(meta TrackMeta, artistID, albumID string) (string, error) {
 	now := time.Now()
 	_, err := ing.db.Exec(`
 		INSERT INTO tracks(
@@ -132,6 +142,40 @@ func (ing *Ingester) upsertTrack(meta TrackMeta, artistID, albumID string) error
 		meta.Duration, meta.FilePath, meta.FileSize, meta.Format,
 		meta.Bitrate, meta.SampleRate, meta.Channels,
 		now, now,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	var id string
+	if err := ing.db.QueryRow(`SELECT id FROM tracks WHERE file_path=?`, meta.FilePath).Scan(&id); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+func (ing *Ingester) importSidecarLyrics(trackID, audioPath string) error {
+	lrcPath := strings.TrimSuffix(audioPath, filepath.Ext(audioPath)) + ".lrc"
+	content, err := os.ReadFile(lrcPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	if strings.TrimSpace(string(content)) == "" {
+		return nil
+	}
+
+	_, err = ing.db.Exec(`
+		INSERT INTO lyrics(track_id,lrc_content,yrc_content,source,updated_at)
+		VALUES(?,?,'','sidecar',CURRENT_TIMESTAMP)
+		ON CONFLICT(track_id) DO UPDATE SET
+			lrc_content=excluded.lrc_content,
+			source=excluded.source,
+			updated_at=CURRENT_TIMESTAMP
+		WHERE lyrics.source = 'sidecar'`,
+		trackID, string(content),
 	)
 	return err
 }
