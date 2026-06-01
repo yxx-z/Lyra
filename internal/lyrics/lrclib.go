@@ -3,7 +3,6 @@ package lyrics
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,26 +10,6 @@ import (
 	"strings"
 	"time"
 )
-
-var (
-	ErrInvalidQuery = errors.New("歌词查询参数不足")
-	ErrNotFound     = errors.New("歌词不存在")
-)
-
-// Query contains track metadata used by lyrics providers.
-type Query struct {
-	TrackName  string
-	ArtistName string
-	AlbumName  string
-	Duration   int
-}
-
-// Result contains provider-normalized lyrics content.
-type Result struct {
-	LRCContent   string
-	PlainContent string
-	Source       string
-}
 
 // LRCLIBClient queries https://lrclib.net/api/get.
 type LRCLIBClient struct {
@@ -55,6 +34,9 @@ func NewLRCLIBClient(baseURL, userAgent string, httpClient *http.Client) *LRCLIB
 		httpClient: httpClient,
 	}
 }
+
+// Name implements Provider.
+func (c *LRCLIBClient) Name() string { return "lrclib" }
 
 func (c *LRCLIBClient) Fetch(ctx context.Context, q Query) (Result, error) {
 	if strings.TrimSpace(q.TrackName) == "" || strings.TrimSpace(q.ArtistName) == "" || q.Duration <= 0 {
