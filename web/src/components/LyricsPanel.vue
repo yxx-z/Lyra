@@ -59,6 +59,17 @@
           </svg>
           <p style="font-size: 16px; font-weight: 600; margin-bottom: 4px; color: var(--text);">纯器乐演奏，请闭上双眼静静聆听</p>
           <p class="muted" style="font-size: 13px;">本首音乐目前尚未同步到滚动歌词文本数据</p>
+          <button
+            class="custom-btn-primary"
+            style="width: auto; padding: 10px 22px; font-size: 14px; margin-top: 18px; display: inline-flex; align-items: center; gap: 8px;"
+            type="button"
+            :disabled="scraping"
+            @click="handleScrape"
+          >
+            <span v-if="scraping" class="loading-spinner" aria-label="刮削中"></span>
+            <span>{{ scraping ? '正在获取歌词…' : '🔍 获取歌词' }}</span>
+          </button>
+          <p v-if="scrapeMessage" class="muted" style="font-size: 12px; margin-top: 10px;">{{ scrapeMessage }}</p>
         </div>
 
         <!-- C. 标准滚动歌词面板 -->
@@ -105,6 +116,8 @@ const lrcLines = ref<LyricLine[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 const currentLineIndex = ref(-1)
+const scraping = ref(false)
+const scrapeMessage = ref('')
 
 const subtitle = computed(() => {
   if (!playerStore.currentTrack) return ''
@@ -147,6 +160,7 @@ async function loadLyrics() {
   error.value = null
   lrcLines.value = []
   coverBroken.value = false
+  scrapeMessage.value = ''
 
   try {
     const res = await props.api.getLyrics(track.trackId)
@@ -164,6 +178,33 @@ async function loadLyrics() {
     isLoading.value = false
     currentLineIndex.value = -1
     syncLyricsIndex()
+  }
+}
+
+// 触发服务端刮削歌词，成功后重载
+async function handleScrape() {
+  const track = playerStore.currentTrack
+  if (!track || scraping.value) return
+  scraping.value = true
+  scrapeMessage.value = ''
+  try {
+    const res = await props.api.scrapeTrack(track.trackId)
+    if (res.status === 'done' || res.status === 'skipped') {
+      await loadLyrics()
+      if (lrcLines.value.length === 0) {
+        scrapeMessage.value = '已获取，但该曲目无可显示的同步歌词'
+      }
+    } else {
+      scrapeMessage.value = '未找到歌词'
+    }
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      scrapeMessage.value = '未找到歌词'
+    } else {
+      scrapeMessage.value = '获取失败，请稍后重试'
+    }
+  } finally {
+    scraping.value = false
   }
 }
 
