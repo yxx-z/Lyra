@@ -23,6 +23,8 @@ export const usePlayerStore = defineStore('player', () => {
   const isMuted = ref(false)
   const shuffle = ref(false)
   const repeatMode = ref<RepeatMode>('all') // 默认为列表循环 'all'
+  const isLoading = ref(false)
+  const playbackError = ref<string | null>(null)
 
   // 初始化音量与静音状态
   audio.volume = volume.value
@@ -49,9 +51,20 @@ export const usePlayerStore = defineStore('player', () => {
     handleTrackEnded()
   })
 
-  audio.addEventListener('error', (e) => {
-    console.error('Audio playback error: ', e)
+  audio.addEventListener('playing', () => {
+    isLoading.value = false
+  })
+
+  audio.addEventListener('waiting', () => {
+    isLoading.value = true
+  })
+
+  audio.addEventListener('error', () => {
+    isLoading.value = false
     isPlaying.value = false
+    playbackError.value = currentTrack.value
+      ? `无法播放《${currentTrack.value.title}》`
+      : '播放失败'
   })
 
   // 自动播放监测与切歌逻辑
@@ -68,6 +81,8 @@ export const usePlayerStore = defineStore('player', () => {
   
   // 1. 播放指定曲目并自动填充/同步队列
   function playTrack(track: ExtendedPlayerTrack, newQueue?: ExtendedPlayerTrack[]) {
+    isLoading.value = true
+    playbackError.value = null
     if (newQueue && newQueue.length > 0) {
       queue.value = [...newQueue]
       const idx = queue.value.findIndex(t => t.trackId === track.trackId)
@@ -118,6 +133,8 @@ export const usePlayerStore = defineStore('player', () => {
   // 3. 播放指定索引的歌曲
   function playAtIndex(index: number) {
     if (index >= 0 && index < queue.value.length) {
+      isLoading.value = true
+      playbackError.value = null
       currentIndex.value = index
       const track = queue.value[index]
       currentTrack.value = track
@@ -216,6 +233,10 @@ export const usePlayerStore = defineStore('player', () => {
     audio.muted = isMuted.value
   }
 
+  function clearError() {
+    playbackError.value = null
+  }
+
   // 监视并在音量变化时强制纠正 Audio 的状态
   watch(volume, (newVol) => {
     audio.volume = newVol
@@ -239,6 +260,9 @@ export const usePlayerStore = defineStore('player', () => {
     prev,
     seek,
     setVolume,
-    toggleMute
+    toggleMute,
+    isLoading,
+    playbackError,
+    clearError
   }
 })

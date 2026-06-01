@@ -1,5 +1,11 @@
 <template>
   <footer class="player-bar">
+    <transition name="fade">
+      <div v-if="player.playbackError" class="playback-error-toast" @click="player.clearError">
+        {{ player.playbackError }}
+      </div>
+    </transition>
+
     <!-- 1. 左侧：正在播放曲目档案区 -->
     <div class="now-playing">
       <div class="player-cover-wrapper">
@@ -64,12 +70,13 @@
         <button
           :class="{ playing: player.isPlaying }"
           class="player-btn-playpause"
-          :title="player.isPlaying ? '暂停' : '播放'"
+          :title="player.isLoading ? '加载中' : (player.isPlaying ? '暂停' : '播放')"
           type="button"
-          :disabled="!player.currentTrack"
+          :disabled="!player.currentTrack || player.isLoading"
           @click="player.togglePlay"
         >
-          <svg v-if="player.isPlaying" viewBox="0 0 24 24">
+          <span v-if="player.isLoading" class="loading-spinner" aria-label="加载中"></span>
+          <svg v-else-if="player.isPlaying" viewBox="0 0 24 24">
             <rect x="6" y="4" width="4" height="16" rx="1" />
             <rect x="14" y="4" width="4" height="16" rx="1" />
           </svg>
@@ -221,6 +228,15 @@ watch(
   () => player.currentTrack?.trackId,
   () => {
     coverBroken.value = false
+  },
+)
+
+watch(
+  () => player.playbackError,
+  (val) => {
+    if (val) {
+      setTimeout(() => player.clearError(), 4000)
+    }
   },
 )
 
