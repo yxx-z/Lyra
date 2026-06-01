@@ -111,6 +111,7 @@ export const usePlayerStore = defineStore('player', () => {
       .catch((err) => {
         console.warn('Playback standard start blocked by browser autoplay rules: ', err)
         isPlaying.value = false
+        isLoading.value = false
       })
   }
 
@@ -148,6 +149,7 @@ export const usePlayerStore = defineStore('player', () => {
         .catch((err) => {
           console.warn('Switch track autoplay blocked: ', err)
           isPlaying.value = false
+          isLoading.value = false
         })
     }
   }
