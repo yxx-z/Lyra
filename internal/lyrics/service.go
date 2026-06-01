@@ -63,6 +63,10 @@ func (s *LyricsService) ScrapeTrack(ctx context.Context, trackID string) (Scrape
 	for _, p := range s.providers {
 		res, ferr := p.Fetch(ctx, q)
 		if ferr == nil {
+			// 防御：provider 返回成功但内容为空，视同未命中，避免写入空歌词
+			if strings.TrimSpace(res.LRCContent) == "" && strings.TrimSpace(res.YRCContent) == "" {
+				continue
+			}
 			if err := s.saveLyrics(trackID, res); err != nil {
 				return ScrapeOutcome{}, err
 			}

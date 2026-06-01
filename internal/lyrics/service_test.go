@@ -147,3 +147,23 @@ func TestScrapeTrack_ProviderError_Propagates(t *testing.T) {
 		t.Error("provider 非 ErrNotFound 错误应透传")
 	}
 }
+
+func TestScrapeTrack_EmptyContentTreatedAsNotFound(t *testing.T) {
+	d := newServiceTestDB(t)
+	empty := &fakeProvider{name: "empty", result: Result{Source: "empty"}} // LRC/YRC 都空，nil error
+	svc := NewLyricsService(d, empty)
+
+	out, err := svc.ScrapeTrack(context.Background(), "t1")
+	if err != nil {
+		t.Fatalf("ScrapeTrack: %v", err)
+	}
+	if out.Status != "failed" {
+		t.Errorf("空内容应视同未命中→failed，实际 %q", out.Status)
+	}
+	// 不应写入空歌词
+	var cnt int
+	d.QueryRow(`SELECT count(*) FROM lyrics WHERE track_id='t1'`).Scan(&cnt)
+	if cnt != 0 {
+		t.Errorf("不应写入歌词记录，实际 %d 条", cnt)
+	}
+}
