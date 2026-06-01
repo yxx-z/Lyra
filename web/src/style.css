@@ -1544,3 +1544,21 @@ button {
     gap: 24px;
   }
 }
+
+/* ==========================================
+   11. 左下角正在播放区域的点击悬停微交互
+   ========================================== */
+.now-playing.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.now-playing.clickable:hover .player-cover-wrapper {
+  transform: translateY(-2px) scale(1.04);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.now-playing.clickable:hover .now-playing-title {
+  color: var(--accent);
+}
+.now-playing.clickable:active {
+  transform: scale(0.97);
+}

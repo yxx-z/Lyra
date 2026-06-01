@@ -7,7 +7,11 @@
     </transition>
 
     <!-- 1. 左侧：正在播放曲目档案区 -->
-    <div class="now-playing">
+    <div
+      class="now-playing"
+      :class="{ clickable: player.currentTrack }"
+      @click="player.currentTrack && $emit('toggle-lyrics')"
+    >
       <div class="player-cover-wrapper">
         <img
           v-if="player.currentTrack && player.currentTrack.coverUrl && !coverBroken"
