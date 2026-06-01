@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -225,6 +226,16 @@ func (s *Scanner) scrapePending(ctx context.Context) {
 		}
 	}
 	rows.Close()
+	// 修复 1：检查行遍历是否出错
+	if err := rows.Err(); err != nil {
+		slog.Warn("刮削阶段遍历待处理曲目出错", "err", err)
+	}
+
+	if len(ids) == 0 {
+		return
+	}
+	// 修复 3：起始日志
+	slog.Info("开始后台歌词刮削", "待处理", len(ids))
 
 	for _, id := range ids {
 		select {
@@ -238,7 +249,9 @@ func (s *Scanner) scrapePending(ctx context.Context) {
 		} else if outcome.Status == "done" {
 			s.lyricsScraped.Add(1)
 		}
-		if outcome.Status == "failed" || (outcome.Status == "done" && outcome.Source != "embedded") {
+		// 修复 2：err 路径也限流
+		shouldThrottle := err != nil || outcome.Status == "failed" || (outcome.Status == "done" && outcome.Source != "embedded")
+		if shouldThrottle {
 			select {
 			case <-time.After(800 * time.Millisecond):
 			case <-ctx.Done():
@@ -246,5 +259,8 @@ func (s *Scanner) scrapePending(ctx context.Context) {
 			}
 		}
 	}
+
+	// 修复 3：结束日志
+	slog.Info("后台歌词刮削结束", "成功", s.lyricsScraped.Load())
 }
 
