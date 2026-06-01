@@ -19,6 +19,7 @@ import (
 	"github.com/yxx-z/lyra/internal/api"
 	"github.com/yxx-z/lyra/internal/config"
 	"github.com/yxx-z/lyra/internal/db"
+	"github.com/yxx-z/lyra/internal/lyrics"
 	"github.com/yxx-z/lyra/internal/scanner"
 )
 
@@ -64,7 +65,12 @@ func main() {
 		slog.Warn("auth.password 未设置，请在 config.yaml 中配置登录密码")
 	}
 
-	sc := scanner.NewScanner(database, cfg.Library, cfg.Transcode.FfprobePath)
+	lyricsService := lyrics.NewLyricsService(
+		database,
+		lyrics.NewEmbeddedProvider(),
+		lyrics.NewLRCLIBClient("https://lrclib.net", cfg.Scraper.MusicBrainz.UserAgent, nil),
+	)
+	sc := scanner.NewScanner(database, cfg.Library, cfg.Transcode.FfprobePath, lyricsService, cfg.Scraper.Enabled)
 	if err := sc.Start(); err != nil {
 		slog.Error("启动扫描器失败", "err", err)
 		os.Exit(1)

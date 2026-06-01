@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/yxx-z/lyra/internal/config"
+	"github.com/yxx-z/lyra/internal/lyrics"
 )
 
 // ErrScanInProgress is returned by TriggerScan when a scan is already running.
@@ -17,11 +18,13 @@ var ErrScanInProgress = errors.New("扫描正在进行中")
 
 // ScanStatus is a point-in-time snapshot of scanner progress.
 type ScanStatus struct {
-	Running   bool      `json:"running"`
-	Total     int64     `json:"total"`
-	Processed int64     `json:"processed"`
-	Errors    int64     `json:"errors"`
-	StartedAt time.Time `json:"started_at"`
+	Running       bool      `json:"running"`
+	Total         int64     `json:"total"`
+	Processed     int64     `json:"processed"`
+	Errors        int64     `json:"errors"`
+	StartedAt     time.Time `json:"started_at"`
+	Phase         string    `json:"phase"`
+	LyricsScraped int64     `json:"lyrics_scraped"`
 }
 
 // Scanner orchestrates directory walking, tag reading, and DB ingestion.
@@ -31,10 +34,16 @@ type Scanner struct {
 	ing         *Ingester
 	ffprobePath string
 
+	lyricsService *lyrics.LyricsService
+	scrapeEnabled bool
+
 	running   atomic.Bool
 	total     atomic.Int64
 	processed atomic.Int64
 	errors    atomic.Int64
+
+	lyricsScraped atomic.Int64
+	phase         atomic.Value // string
 
 	mu             sync.RWMutex
 	startedAt      time.Time
@@ -46,14 +55,18 @@ type Scanner struct {
 }
 
 // NewScanner creates a Scanner. Call Start to begin scanning.
-func NewScanner(db *sql.DB, cfg config.LibraryConfig, ffprobePath string) *Scanner {
-	return &Scanner{
-		db:          db,
-		cfg:         cfg,
-		ing:         NewIngester(db),
-		ffprobePath: ffprobePath,
-		stopCh:      make(chan struct{}),
+func NewScanner(db *sql.DB, cfg config.LibraryConfig, ffprobePath string, lyricsService *lyrics.LyricsService, scrapeEnabled bool) *Scanner {
+	s := &Scanner{
+		db:            db,
+		cfg:           cfg,
+		ing:           NewIngester(db),
+		ffprobePath:   ffprobePath,
+		lyricsService: lyricsService,
+		scrapeEnabled: scrapeEnabled,
+		stopCh:        make(chan struct{}),
 	}
+	s.phase.Store("idle")
+	return s
 }
 
 // Start begins an initial full scan (if paths configured) and starts fsnotify watcher (if cfg.Watch).
@@ -103,12 +116,18 @@ func (s *Scanner) Status() ScanStatus {
 	s.mu.RLock()
 	startedAt := s.startedAt
 	s.mu.RUnlock()
+	phase, _ := s.phase.Load().(string)
+	if phase == "" {
+		phase = "idle"
+	}
 	return ScanStatus{
-		Running:   s.running.Load(),
-		Total:     s.total.Load(),
-		Processed: s.processed.Load(),
-		Errors:    s.errors.Load(),
-		StartedAt: startedAt,
+		Running:       s.running.Load(),
+		Total:         s.total.Load(),
+		Processed:     s.processed.Load(),
+		Errors:        s.errors.Load(),
+		StartedAt:     startedAt,
+		Phase:         phase,
+		LyricsScraped: s.lyricsScraped.Load(),
 	}
 }
 
@@ -126,6 +145,8 @@ func (s *Scanner) doScan() {
 	s.total.Store(0)
 	s.processed.Store(0)
 	s.errors.Store(0)
+	s.lyricsScraped.Store(0)
+	s.phase.Store("scanning")
 	s.mu.Lock()
 	s.startedAt = time.Now()
 	s.mu.Unlock()
@@ -180,6 +201,49 @@ func (s *Scanner) doScan() {
 			s.errors.Add(1)
 		} else {
 			s.processed.Add(1)
+		}
+	}
+
+	// 刮削阶段：为缺歌词的曲目串行刮削（受 scraper.enabled 控制，可被 ctx 中断）
+	if s.scrapeEnabled && s.lyricsService != nil {
+		s.phase.Store("scraping")
+		s.scrapePending(ctx)
+	}
+	s.phase.Store("idle")
+}
+
+func (s *Scanner) scrapePending(ctx context.Context) {
+	rows, err := s.db.Query(`SELECT id FROM tracks WHERE scrape_status='pending' AND is_available=1`)
+	if err != nil {
+		return
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	rows.Close()
+
+	for _, id := range ids {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		outcome, err := s.lyricsService.ScrapeTrack(ctx, id)
+		if err != nil || outcome.Status == "failed" {
+			s.errors.Add(1)
+		} else if outcome.Status == "done" {
+			s.lyricsScraped.Add(1)
+		}
+		if outcome.Status == "failed" || (outcome.Status == "done" && outcome.Source != "embedded") {
+			select {
+			case <-time.After(800 * time.Millisecond):
+			case <-ctx.Done():
+				return
+			}
 		}
 	}
 }
