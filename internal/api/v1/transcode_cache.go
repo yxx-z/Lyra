@@ -12,6 +12,9 @@ import (
 type TranscodeCache struct {
 	dir      string
 	mu       sync.Mutex
+	// inflight maps cache key → per-key lock. It grows bounded by the number of
+	// distinct (trackID, format, bitrate) combinations (≈ library size), not by
+	// request count; entries are never removed, which is acceptable at this scale.
 	inflight map[string]*sync.Mutex
 }
 

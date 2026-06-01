@@ -3,6 +3,7 @@ package v1
 
 import (
 	"database/sql"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -128,11 +129,15 @@ func (h *StreamHandler) transcodeToFile(r *http.Request, filePath, dst string, b
 		tmp,
 	)
 	if err := cmd.Run(); err != nil {
-		os.Remove(tmp)
+		if rmErr := os.Remove(tmp); rmErr != nil {
+			slog.Warn("清理转码临时文件失败", "path", tmp, "err", rmErr)
+		}
 		return err
 	}
 	if err := os.Rename(tmp, dst); err != nil {
-		os.Remove(tmp)
+		if rmErr := os.Remove(tmp); rmErr != nil {
+			slog.Warn("清理转码临时文件失败", "path", tmp, "err", rmErr)
+		}
 		return err
 	}
 	return nil
