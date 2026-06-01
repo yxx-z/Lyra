@@ -2,6 +2,7 @@
 package scanner
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -135,5 +136,21 @@ func TestInferFromPath_DirectlyInRoot(t *testing.T) {
 	}
 	if result.Album != "" {
 		t.Errorf("album should be empty for root-level file, got %q", result.Album)
+	}
+}
+
+func TestRead_FfprobeUnavailable_DurationZero(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "song.mp3")
+	if err := os.WriteFile(f, []byte("notreal"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// ffprobe 路径无效 → duration 应保持 0，且不报错
+	meta, err := Read(f, []string{dir}, "/nonexistent/ffprobe")
+	if err != nil {
+		t.Fatalf("Read should not fail when ffprobe missing: %v", err)
+	}
+	if meta.Duration != 0 {
+		t.Errorf("Duration = %d, want 0 (ffprobe unavailable)", meta.Duration)
 	}
 }

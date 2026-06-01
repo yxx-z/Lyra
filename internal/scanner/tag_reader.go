@@ -49,7 +49,7 @@ func IsAudioFile(path string) bool {
 }
 
 // Read extracts metadata from path, falling back to path inference then defaults.
-func Read(path string, libraryPaths []string) (TrackMeta, error) {
+func Read(path string, libraryPaths []string, ffprobePath string) (TrackMeta, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return TrackMeta{}, err
@@ -97,6 +97,16 @@ func Read(path string, libraryPaths []string) (TrackMeta, error) {
 	}
 	if meta.Album == "" {
 		meta.Album = "未知专辑"
+	}
+
+	// ffprobe 提取音频属性（失败保持 0，不阻断扫描）
+	if ffprobePath != "" {
+		if props, err := Probe(ffprobePath, path); err == nil {
+			meta.Duration = props.Duration
+			meta.Bitrate = props.Bitrate
+			meta.SampleRate = props.SampleRate
+			meta.Channels = props.Channels
+		}
 	}
 
 	return meta, nil
