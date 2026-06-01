@@ -99,7 +99,7 @@ export const usePlayerStore = defineStore('player', () => {
     }
 
     currentTrack.value = track
-    audio.src = track.streamUrl
+    audio.src = withPlaybackNonce(track.streamUrl)
     audio.currentTime = 0
     currentTime.value = 0
     
@@ -139,7 +139,7 @@ export const usePlayerStore = defineStore('player', () => {
       currentIndex.value = index
       const track = queue.value[index]
       currentTrack.value = track
-      audio.src = track.streamUrl
+      audio.src = withPlaybackNonce(track.streamUrl)
       audio.currentTime = 0
       currentTime.value = 0
       audio.play()
@@ -237,6 +237,11 @@ export const usePlayerStore = defineStore('player', () => {
 
   function clearError() {
     playbackError.value = null
+  }
+
+  function withPlaybackNonce(url: string) {
+    const separator = url.includes('?') ? '&' : '?'
+    return `${url}${separator}_play=${Date.now()}`
   }
 
   // 监视并在音量变化时强制纠正 Audio 的状态

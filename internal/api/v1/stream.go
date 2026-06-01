@@ -83,7 +83,7 @@ func (h *StreamHandler) serveTranscoded(w http.ResponseWriter, r *http.Request, 
 
 	// 命中缓存：直接 ServeFile（自带 Range）
 	if _, err := os.Stat(cachePath); err == nil {
-		w.Header().Set("Content-Type", "audio/mpeg")
+		prepareAudioResponse(w, r, "audio/mpeg")
 		http.ServeFile(w, r, cachePath)
 		return
 	}
@@ -104,8 +104,15 @@ func (h *StreamHandler) serveTranscoded(w http.ResponseWriter, r *http.Request, 
 	}
 	lock.Unlock()
 
-	w.Header().Set("Content-Type", "audio/mpeg")
+	prepareAudioResponse(w, r, "audio/mpeg")
 	http.ServeFile(w, r, cachePath)
+}
+
+func prepareAudioResponse(w http.ResponseWriter, r *http.Request, contentType string) {
+	r.Header.Del("If-Modified-Since")
+	r.Header.Del("If-None-Match")
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "no-store")
 }
 
 // transcodeToFile transcodes filePath to mp3 at the given bitrate, writing to a

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yxx-z/lyra/internal/config"
 )
@@ -178,5 +179,48 @@ func TestStream_TranscodeIgnoresCanceledProbeRequest(t *testing.T) {
 	cachePath := h.cache.Path("t1", "mp3", 192)
 	if _, err := os.Stat(cachePath); err != nil {
 		t.Fatalf("want cache file after canceled request, got %v", err)
+	}
+}
+
+func TestStream_CachedTranscodeIgnoresBrowserCacheValidators(t *testing.T) {
+	d := newTestDB(t)
+	dir := t.TempDir()
+	audioFile := filepath.Join(dir, "test.m4a")
+	if err := os.WriteFile(audioFile, []byte("FAKEM4ADATA"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(`INSERT INTO artists(id,name) VALUES('a1','A')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(`INSERT INTO albums(id,title,artist_id) VALUES('al1','B','a1')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(`INSERT INTO tracks(id,title,artist_id,album_id,file_path,format,is_available,scrape_status) VALUES('t1','T','a1','al1',?,'m4a',1,'pending')`, audioFile); err != nil {
+		t.Fatal(err)
+	}
+
+	cacheDir := t.TempDir()
+	h := NewStreamHandler(d, config.TranscodeConfig{DefaultBitrate: 192}, cacheDir)
+	cachePath := h.cache.Path("t1", "mp3", 192)
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cachePath, []byte("MP3DATA"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tracks/t1/stream", nil)
+	req.Header.Set("If-Modified-Since", time.Now().Add(time.Hour).UTC().Format(http.TimeFormat))
+	w := httptest.NewRecorder()
+	h.stream(w, req, "t1")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d", w.Code)
+	}
+	if cacheControl := w.Header().Get("Cache-Control"); cacheControl != "no-store" {
+		t.Errorf("want Cache-Control no-store, got %q", cacheControl)
+	}
+	if body := w.Body.String(); body != "MP3DATA" {
+		t.Errorf("want MP3DATA body, got %q", body)
 	}
 }
