@@ -2,6 +2,7 @@
 package v1
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -139,5 +140,43 @@ func TestStream_TranscodeCacheHit(t *testing.T) {
 	data, _ := os.ReadFile(marker)
 	if got := strings.Count(string(data), "x"); got != 1 {
 		t.Errorf("ffmpeg called %d times, want 1 (second request should hit cache)", got)
+	}
+}
+
+func TestStream_TranscodeIgnoresCanceledProbeRequest(t *testing.T) {
+	d := newTestDB(t)
+	dir := t.TempDir()
+	audioFile := filepath.Join(dir, "test.m4a")
+	if err := os.WriteFile(audioFile, []byte("FAKEM4ADATA"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ffmpeg := filepath.Join(dir, "ffmpeg")
+	script := "#!/bin/sh\neval \"out=\\${$#}\"\nprintf MP3DATA > \"$out\"\n"
+	if err := os.WriteFile(ffmpeg, []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := d.Exec(`INSERT INTO artists(id,name) VALUES('a1','A')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(`INSERT INTO albums(id,title,artist_id) VALUES('al1','B','a1')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(`INSERT INTO tracks(id,title,artist_id,album_id,file_path,format,is_available,scrape_status) VALUES('t1','T','a1','al1',?,'m4a',1,'pending')`, audioFile); err != nil {
+		t.Fatal(err)
+	}
+
+	cacheDir := t.TempDir()
+	h := NewStreamHandler(d, config.TranscodeConfig{FFmpegPath: ffmpeg, DefaultBitrate: 192}, cacheDir)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tracks/t1/stream", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	h.stream(w, req, "t1")
+
+	cachePath := h.cache.Path("t1", "mp3", 192)
+	if _, err := os.Stat(cachePath); err != nil {
+		t.Fatalf("want cache file after canceled request, got %v", err)
 	}
 }

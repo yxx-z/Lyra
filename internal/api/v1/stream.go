@@ -2,6 +2,7 @@
 package v1
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 	"net/http"
@@ -92,7 +93,7 @@ func (h *StreamHandler) serveTranscoded(w http.ResponseWriter, r *http.Request, 
 	lock.Lock()
 	// double-check：可能其他请求已转好
 	if _, err := os.Stat(cachePath); err != nil {
-		if terr := h.transcodeToFile(r, filePath, cachePath, bitrate); terr != nil {
+		if terr := h.transcodeToFile(filePath, cachePath, bitrate); terr != nil {
 			lock.Unlock()
 			if r.Context().Err() != nil {
 				return // 客户端断开
@@ -109,14 +110,14 @@ func (h *StreamHandler) serveTranscoded(w http.ResponseWriter, r *http.Request, 
 
 // transcodeToFile transcodes filePath to mp3 at the given bitrate, writing to a
 // temp file then atomically renaming to dst. A failed run cleans up the temp file.
-func (h *StreamHandler) transcodeToFile(r *http.Request, filePath, dst string, bitrate int) error {
+func (h *StreamHandler) transcodeToFile(filePath, dst string, bitrate int) error {
 	if err := os.MkdirAll(h.cache.dir, 0o755); err != nil {
 		return err
 	}
 	tmp := dst + ".tmp"
 
 	cmd := exec.CommandContext(
-		r.Context(),
+		context.Background(),
 		h.transcode.FFmpegPath,
 		"-hide_banner",
 		"-loglevel", "error",
@@ -129,13 +130,13 @@ func (h *StreamHandler) transcodeToFile(r *http.Request, filePath, dst string, b
 		tmp,
 	)
 	if err := cmd.Run(); err != nil {
-		if rmErr := os.Remove(tmp); rmErr != nil {
+		if rmErr := os.Remove(tmp); rmErr != nil && !os.IsNotExist(rmErr) {
 			slog.Warn("清理转码临时文件失败", "path", tmp, "err", rmErr)
 		}
 		return err
 	}
 	if err := os.Rename(tmp, dst); err != nil {
-		if rmErr := os.Remove(tmp); rmErr != nil {
+		if rmErr := os.Remove(tmp); rmErr != nil && !os.IsNotExist(rmErr) {
 			slog.Warn("清理转码临时文件失败", "path", tmp, "err", rmErr)
 		}
 		return err
