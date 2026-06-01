@@ -1,0 +1,235 @@
+<template>
+  <div class="lyrics-panel-wrapper" :class="{ 'is-open': isOpen }">
+    <!-- 1. Apple Music 式流动封面高斯模糊背景层 -->
+    <div
+      v-if="playerStore.currentTrack && playerStore.currentTrack.coverUrl && !coverBroken"
+      class="lyrics-backdrop"
+      :style="{ backgroundImage: `url(${playerStore.currentTrack.coverUrl})` }"
+    ></div>
+
+    <!-- 2. 右上角精美关闭按钮 -->
+    <button class="lyrics-close-btn" type="button" title="收折歌词" @click="$emit('close')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
+    </button>
+
+    <!-- 3. 主体分栏交互大盘 -->
+    <div v-if="playerStore.currentTrack" class="lyrics-container">
+      <!-- 左栏：胶片封面呼吸展区 -->
+      <div class="lyrics-cover-col">
+        <img
+          v-if="playerStore.currentTrack.coverUrl && !coverBroken"
+          :src="playerStore.currentTrack.coverUrl"
+          alt="Large Album Artwork"
+          class="lyrics-large-cover"
+          :class="{ 'is-playing': playerStore.isPlaying }"
+          @error="coverBroken = true"
+        />
+        <div v-else class="lyrics-large-cover placeholder-cover" style="font-size: 40px; display: grid; place-items: center; background: linear-gradient(135deg, #1f2937, #111827);">
+          ♪
+        </div>
+
+        <div class="lyrics-song-info">
+          <h3 class="lyrics-song-title">{{ playerStore.currentTrack.title }}</h3>
+          <p class="lyrics-song-artist">{{ subtitle }}</p>
+        </div>
+      </div>
+
+      <!-- 右栏：滚动歌词主滑槽 -->
+      <div class="lyrics-list-col">
+        <!-- A. 加载中状态 -->
+        <div v-if="isLoading" class="empty-state" style="border: 0; background: transparent; height: 100%;">
+          <svg class="animate-spin" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 12px; color: var(--accent);">
+            <line x1="12" y1="2" x2="12" y2="6" />
+            <line x1="12" y1="18" x2="12" y2="22" />
+            <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
+            <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
+          </svg>
+          <p class="muted">正在调取与解析歌词...</p>
+        </div>
+
+        <!-- B. 无歌词/纯器乐兜底容错 -->
+        <div v-else-if="error === 'no_lyrics' || lrcLines.length === 0" class="empty-state" style="border: 0; background: transparent; height: 100%;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width: 44px; height: 44px; margin-bottom: 16px; color: var(--text-dim); opacity: 0.6;">
+            <path d="M9 18V5l12-2v13" />
+            <circle cx="6" cy="18" r="3" />
+            <circle cx="18" cy="16" r="3" />
+          </svg>
+          <p style="font-size: 16px; font-weight: 600; margin-bottom: 4px; color: var(--text);">纯器乐演奏，请闭上双眼静静聆听</p>
+          <p class="muted" style="font-size: 13px;">本首音乐目前尚未同步到滚动歌词文本数据</p>
+        </div>
+
+        <!-- C. 标准滚动歌词面板 -->
+        <div v-else ref="scrollerRef" class="lyrics-scroller">
+          <button
+            v-for="(line, idx) in lrcLines"
+            :key="idx"
+            :class="{ active: idx === currentLineIndex }"
+            class="lyric-line"
+            type="button"
+            @click="seekToLine(line.time)"
+          >
+            {{ line.text || '• • •' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, watch, computed, nextTick } from 'vue'
+import { usePlayerStore } from '../stores/player'
+import type { ApiClient } from '../api/client'
+
+// 约定 LRC 解析的单行歌词数据接口
+interface LyricLine {
+  time: number
+  text: string
+}
+
+const props = defineProps<{
+  isOpen: boolean
+  api: ApiClient // 共享父组件配置好的 Api 实例
+}>()
+
+defineEmits<{
+  close: []
+}>()
+
+const playerStore = usePlayerStore()
+const coverBroken = ref(false)
+const lrcLines = ref<LyricLine[]>([])
+const isLoading = ref(false)
+const error = ref<string | null>(null)
+const currentLineIndex = ref(-1)
+
+const subtitle = computed(() => {
+  if (!playerStore.currentTrack) return ''
+  return [playerStore.currentTrack.artist, playerStore.currentTrack.album].filter(Boolean).join(' · ')
+})
+
+// LRC 歌词解析高精度正则算法 (支持一行多时间归集)
+function parseLrc(lrcText: string): LyricLine[] {
+  if (!lrcText) return []
+  const lines = lrcText.split('\n')
+  const result: LyricLine[] = []
+  const timeRegex = /\[(\d+):(\d+)(?:\.(\d+))?\]/g
+
+  for (const line of lines) {
+    const text = line.replace(timeRegex, '').trim()
+    timeRegex.lastIndex = 0
+    let match
+    while ((match = timeRegex.exec(line)) !== null) {
+      const min = parseInt(match[1], 10)
+      const sec = parseInt(match[2], 10)
+      const ms = match[3] ? parseInt(match[3].padEnd(3, '0').slice(0, 3), 10) : 0
+      const totalSeconds = min * 60 + sec + ms / 1000
+      result.push({ time: totalSeconds, text })
+    }
+  }
+
+  // 严格按时间点升序排序，保证对焦不跳跃
+  return result.sort((a, b) => a.time - b.time)
+}
+
+// 动态拉取歌词
+async function loadLyrics() {
+  const track = playerStore.currentTrack
+  if (!track) {
+    lrcLines.value = []
+    return
+  }
+
+  isLoading.value = true
+  error.value = null
+  lrcLines.value = []
+  coverBroken.value = false
+
+  try {
+    const res = await props.api.getLyrics(track.trackId)
+    if (res && res.lrc_content) {
+      lrcLines.value = parseLrc(res.lrc_content)
+    } else {
+      error.value = 'no_lyrics'
+    }
+  } catch (err) {
+    console.warn('Lyrics fetch failed or 404. Gracefully showing pure-instrumental mock layout: ', err)
+    error.value = 'no_lyrics'
+  } finally {
+    isLoading.value = false
+    currentLineIndex.value = -1
+    syncLyricsIndex()
+  }
+}
+
+// 卡拉OK级时间轴查找锁定
+function syncLyricsIndex() {
+  if (lrcLines.value.length === 0) return
+  const time = playerStore.currentTime
+  let index = -1
+
+  for (let i = 0; i < lrcLines.value.length; i++) {
+    if (time >= lrcLines.value[i].time) {
+      index = i
+    } else {
+      break
+    }
+  }
+
+  const nextIndex = index !== -1 ? index : 0
+  if (currentLineIndex.value !== nextIndex) {
+    currentLineIndex.value = nextIndex
+    scrollToActiveLine()
+  }
+}
+
+// 平滑滚动对焦至屏幕中线
+function scrollToActiveLine() {
+  nextTick(() => {
+    const activeEl = document.querySelector('.lyric-line.active')
+    if (activeEl) {
+      activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  })
+}
+
+// 歌词点击跳转播放 (Seek-on-Click)
+function seekToLine(time: number) {
+  playerStore.seek(time)
+  // 跳转时间后，瞬间自我强行校正高亮，提供绝对顺畅对齐
+  syncLyricsIndex()
+}
+
+// 侦听歌曲时间更新以滚动
+watch(() => playerStore.currentTime, () => {
+  if (props.isOpen) {
+    syncLyricsIndex()
+  }
+})
+
+// 监视切歌与面板开启
+watch(() => playerStore.currentTrack?.trackId, () => {
+  if (props.isOpen) {
+    void loadLyrics()
+  }
+})
+
+watch(() => props.isOpen, (newVal) => {
+  if (newVal) {
+    void loadLyrics()
+  }
+})
+</script>
+
+<style scoped>
+.animate-spin {
+  animation: spin 1.2s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+</style>

@@ -81,6 +81,12 @@ export type PlayerTrack = {
   streamUrl: string
 }
 
+export type LyricsResponse = {
+  lrc_content: string
+  yrc_content?: string
+  source?: string
+}
+
 export class ApiError extends Error {
   status: number
 
@@ -154,6 +160,10 @@ export class ApiClient {
 
   triggerScan() {
     return this.request<{ ok: boolean }>('/api/v1/library/scan', { method: 'POST' })
+  }
+
+  getLyrics(trackId: string) {
+    return this.request<LyricsResponse>(`/api/v1/tracks/${encodeURIComponent(trackId)}/lyrics`)
   }
 
   private async request<T>(

@@ -86,9 +86,19 @@
 
       <!-- 3. 常驻高保真控制台插槽 -->
       <template #player>
-        <PlayerBar />
+        <PlayerBar
+          :is-lyrics-open="isLyricsOpen"
+          @toggle-lyrics="isLyricsOpen = !isLyricsOpen"
+        />
       </template>
     </LibraryShell>
+
+    <!-- 4. 全屏沉浸式滚动歌词浮层 -->
+    <LyricsPanel
+      :is-open="isLyricsOpen"
+      :api="api"
+      @close="isLyricsOpen = false"
+    />
   </div>
 </template>
 
@@ -115,6 +125,7 @@ import LoginView from './components/LoginView.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import ScanPanel from './components/ScanPanel.vue'
 import SearchPanel from './components/SearchPanel.vue'
+import LyricsPanel from './components/LyricsPanel.vue'
 
 // 引入全局音频 Store
 const playerStore = usePlayerStore()
@@ -126,6 +137,9 @@ const mode = ref<ViewMode>('albums')
 const loginLoading = ref(false)
 const loginError = ref('')
 const globalError = ref('')
+
+// 沉浸式全屏歌词是否开启状态
+const isLyricsOpen = ref(false)
 
 const albums = ref<AlbumSummary[]>([])
 const selectedAlbum = ref<AlbumDetailType | null>(null)
@@ -410,6 +424,7 @@ async function logout() {
   api.setToken(null)
   selectedAlbum.value = null
   selectedArtist.value = null
+  isLyricsOpen.value = false // 登出时自动收折歌词面板
   playerStore.$reset() // 清空全局播放状态
 }
 

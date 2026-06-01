@@ -176,6 +176,21 @@
           </svg>
         </button>
 
+        <!-- 沉浸式全屏歌词触发按钮 -->
+        <button
+          :class="{ active: isLyricsOpen }"
+          class="player-btn"
+          title="显示歌词"
+          type="button"
+          :disabled="!player.currentTrack"
+          @click="$emit('toggle-lyrics')"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+          </svg>
+        </button>
+
         <!-- 音量滑块总成 -->
         <div class="slider-container" style="flex: 1; height: 3px;">
           <div class="slider-fill" :style="{ width: volumePercent + '%' }"></div>
@@ -199,6 +214,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { usePlayerStore } from '../stores/player'
+
+defineProps<{
+  isLyricsOpen: boolean
+}>()
+
+defineEmits<{
+  'toggle-lyrics': []
+}>()
 
 const player = usePlayerStore()
 const coverBroken = ref(false)

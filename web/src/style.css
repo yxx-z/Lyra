@@ -1313,3 +1313,234 @@ button {
     display: none;
   }
 }
+
+/* ==========================================
+   10. 沉浸式歌词面板 (Lyrics Panel)
+   ========================================== */
+.lyrics-panel-wrapper {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  z-index: 500;
+  background: #06070a;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.6s ease;
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.lyrics-panel-wrapper.is-open {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.lyrics-backdrop {
+  position: absolute;
+  top: -10%; left: -10%; width: 120%; height: 120%;
+  background-size: cover;
+  background-position: center;
+  filter: blur(80px) brightness(0.25);
+  opacity: 0.6;
+  z-index: 0;
+  pointer-events: none;
+  transform: scale(1.15);
+  transition: background-image 0.8s ease-in-out;
+}
+
+.lyrics-container {
+  position: relative;
+  z-index: 1;
+  width: 100%; height: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  align-items: center;
+  padding: 60px 40px 120px;
+  gap: 80px;
+}
+
+.lyrics-cover-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+}
+
+.lyrics-large-cover {
+  width: min(360px, 75vw);
+  aspect-ratio: 1;
+  border-radius: 20px;
+  object-fit: cover;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+/* 唱片缓慢呼吸缩放动效 */
+.lyrics-large-cover.is-playing {
+  animation: breathingCover 8s ease-in-out infinite alternate;
+}
+
+.lyrics-song-info {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lyrics-song-title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.lyrics-song-artist {
+  font-size: 16px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.lyrics-list-col {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+/* 顶部和底部的歌词淡出遮罩 */
+.lyrics-list-col::before,
+.lyrics-list-col::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0;
+  height: 140px;
+  z-index: 2;
+  pointer-events: none;
+}
+.lyrics-list-col::before {
+  top: 0;
+  background: linear-gradient(to bottom, #06070a 15%, transparent 100%);
+}
+.lyrics-list-col::after {
+  bottom: 0;
+  background: linear-gradient(to top, #06070a 15%, transparent 100%);
+}
+
+.lyrics-scroller {
+  width: 100%;
+  height: 100%;
+  overflow-y: scroll;
+  padding: 260px 0; /* 留足上下空间对齐中线 */
+  scroll-behavior: smooth;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  scrollbar-width: none;
+}
+.lyrics-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.lyric-line {
+  width: 100%;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.25);
+  text-align: left;
+  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  cursor: pointer;
+  user-select: none;
+  transform-origin: left center;
+}
+.lyric-line:hover {
+  color: rgba(255, 255, 255, 0.7);
+  transform: scale(1.02);
+}
+.lyric-line.active {
+  color: #fff;
+  opacity: 1;
+  font-weight: 800;
+  transform: scale(1.06);
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.25);
+}
+
+.lyrics-close-btn {
+  position: absolute;
+  top: 32px; right: 32px;
+  z-index: 10;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-glass);
+  color: var(--text);
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.lyrics-close-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: rotate(90deg);
+}
+.lyrics-close-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* 唱片呼吸关键帧 */
+@keyframes breathingCover {
+  0% {
+    transform: scale(0.98);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 255, 255, 0.02);
+  }
+  100% {
+    transform: scale(1.02);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7), 0 0 40px rgba(255, 255, 255, 0.08);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 960px) {
+  .lyrics-container {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 32px;
+    padding: 80px 24px 160px;
+  }
+  .lyrics-cover-col {
+    gap: 12px;
+  }
+  .lyrics-large-cover {
+    width: min(200px, 50vw);
+  }
+  .lyrics-song-title {
+    font-size: 20px;
+  }
+  .lyrics-song-artist {
+    font-size: 14px;
+  }
+  .lyric-line {
+    font-size: 20px;
+    text-align: center;
+    transform-origin: center center;
+  }
+  .lyric-line:hover {
+    transform: scale(1.02);
+  }
+  .lyric-line.active {
+    transform: scale(1.04);
+  }
+  .lyrics-list-col::before {
+    height: 80px;
+  }
+  .lyrics-list-col::after {
+    height: 80px;
+  }
+  .lyrics-scroller {
+    padding: 160px 0;
+    gap: 24px;
+  }
+}
