@@ -55,3 +55,13 @@ func TestDefault_AuthUsernameIsAdmin(t *testing.T) {
 		t.Errorf("want username=admin, got %q", cfg.Auth.Username)
 	}
 }
+
+func TestDefault_FfprobeAndTranscodeDir(t *testing.T) {
+	cfg := Default()
+	if cfg.Transcode.FfprobePath != "ffprobe" {
+		t.Errorf("want ffprobe, got %q", cfg.Transcode.FfprobePath)
+	}
+	if cfg.Cache.TranscodeDir != "./data/transcode" {
+		t.Errorf("want ./data/transcode, got %q", cfg.Cache.TranscodeDir)
+	}
+}

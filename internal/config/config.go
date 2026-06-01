@@ -46,6 +46,7 @@ type DatabaseConfig struct {
 type CacheConfig struct {
 	ArtworkDir       string `yaml:"artwork_dir"`
 	ArtworkMaxSizeMB int    `yaml:"artwork_max_size_mb"`
+	TranscodeDir     string `yaml:"transcode_dir"`
 }
 
 type ScraperConfig struct {
@@ -80,6 +81,7 @@ type SpotifyConfig struct {
 
 type TranscodeConfig struct {
 	FFmpegPath     string `yaml:"ffmpeg_path"`
+	FfprobePath    string `yaml:"ffprobe_path"`
 	DefaultFormat  string `yaml:"default_format"`
 	DefaultBitrate int    `yaml:"default_bitrate"`
 }
@@ -95,10 +97,11 @@ func Default() *Config {
 		Auth:     AuthConfig{Disable: false, Username: "admin"},
 		Library:  LibraryConfig{ScanInterval: 3600, Watch: true},
 		Database: DatabaseConfig{Path: "./data/music.db"},
-		Cache:    CacheConfig{ArtworkDir: "./data/artwork", ArtworkMaxSizeMB: 2048},
+		Cache:    CacheConfig{ArtworkDir: "./data/artwork", ArtworkMaxSizeMB: 2048, TranscodeDir: "./data/transcode"},
 		Scraper:  ScraperConfig{Enabled: true, Netease: NeteaseConfig{Enabled: true}},
 		Transcode: TranscodeConfig{
 			FFmpegPath:     "ffmpeg",
+			FfprobePath:    "ffprobe",
 			DefaultFormat:  "mp3",
 			DefaultBitrate: 192,
 		},
