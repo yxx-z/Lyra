@@ -14,6 +14,7 @@ import (
 	v1 "github.com/yxx-z/lyra/internal/api/v1"
 	"github.com/yxx-z/lyra/internal/config"
 	lyricspkg "github.com/yxx-z/lyra/internal/lyrics"
+	metadatapkg "github.com/yxx-z/lyra/internal/metadata"
 	"github.com/yxx-z/lyra/internal/scanner"
 	"github.com/yxx-z/lyra/ui"
 )
@@ -67,6 +68,15 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 		)
 		scrape := v1.NewScrapeHandler(lyricsService)
 		r.Post("/tracks/{id}/scrape", scrape.ScrapeTrack)
+
+		metadataService := metadatapkg.NewMetadataService(
+			db,
+			metadatapkg.NewMusicBrainzClient("https://musicbrainz.org", cfg.Scraper.MusicBrainz.UserAgent, nil),
+			metadatapkg.NewCoverArtClient("https://coverartarchive.org", nil),
+			cfg.Cache.ArtworkDir,
+		)
+		albumScrape := v1.NewAlbumScrapeHandler(metadataService)
+		r.Post("/albums/{id}/scrape", albumScrape.ScrapeAlbum)
 
 		search := v1.NewSearchHandler(db)
 		r.Get("/search", search.Search)

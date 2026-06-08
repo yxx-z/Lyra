@@ -20,6 +20,7 @@ import (
 	"github.com/yxx-z/lyra/internal/config"
 	"github.com/yxx-z/lyra/internal/db"
 	"github.com/yxx-z/lyra/internal/lyrics"
+	"github.com/yxx-z/lyra/internal/metadata"
 	"github.com/yxx-z/lyra/internal/scanner"
 )
 
@@ -70,7 +71,13 @@ func main() {
 		lyrics.NewEmbeddedProvider(),
 		lyrics.NewLRCLIBClient("https://lrclib.net", cfg.Scraper.MusicBrainz.UserAgent, nil),
 	)
-	sc := scanner.NewScanner(database, cfg.Library, cfg.Transcode.FfprobePath, lyricsService, cfg.Scraper.Enabled)
+	metadataService := metadata.NewMetadataService(
+		database,
+		metadata.NewMusicBrainzClient("https://musicbrainz.org", cfg.Scraper.MusicBrainz.UserAgent, nil),
+		metadata.NewCoverArtClient("https://coverartarchive.org", nil),
+		cfg.Cache.ArtworkDir,
+	)
+	sc := scanner.NewScanner(database, cfg.Library, cfg.Transcode.FfprobePath, lyricsService, metadataService, cfg.Scraper.Enabled)
 	if err := sc.Start(); err != nil {
 		slog.Error("启动扫描器失败", "err", err)
 		os.Exit(1)
