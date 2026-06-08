@@ -243,7 +243,7 @@ async function handleScrape() {
     const res = await props.api.scrapeTrack(track.trackId)
     if (res.status === 'done' || res.status === 'skipped') {
       await loadLyrics()
-      if (lrcLines.value.length === 0) {
+      if (lrcLines.value.length === 0 && yrcLines.value.length === 0) {
         scrapeMessage.value = '未找到可显示的歌词'
       }
     } else {
@@ -270,7 +270,7 @@ function wordFillPercent(word: YrcWord, time: number): number {
 // 当前 YRC 行索引（currentTime 落在哪行）
 const yrcCurrentLine = computed(() => {
   const time = playerStore.currentTime
-  let idx = 0
+  let idx = -1
   for (let i = 0; i < yrcLines.value.length; i++) {
     if (time >= yrcLines.value[i].start) idx = i
     else break
@@ -321,10 +321,15 @@ function seekToLine(time: number) {
 // 侦听歌曲时间更新以滚动
 watch(() => playerStore.currentTime, () => {
   if (!props.isOpen) return
-  if (yrcLines.value.length > 0) {
-    scrollToActiveLine()
-  } else {
+  if (yrcLines.value.length === 0) {
     syncLyricsIndex()
+  }
+})
+
+// YRC 模式：仅当前行变化时滚动，避免每帧 scrollIntoView
+watch(yrcCurrentLine, () => {
+  if (props.isOpen && yrcLines.value.length > 0) {
+    scrollToActiveLine()
   }
 })
 
