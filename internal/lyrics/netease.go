@@ -146,6 +146,8 @@ func (p *NeteaseProvider) search(ctx context.Context, keyword string) ([]netease
 
 // lyric 调 eapi song/lyric/v1，返回 (普通lrc, 原始yrc)。
 func (p *NeteaseProvider) lyric(ctx context.Context, songID int64) (string, string, error) {
+	// lv/yv/yrc 等为各类歌词的“版本号”参数（0 = 取当前版本，并非禁用）；
+	// 携带 yrc/yv 即请求逐字歌词，与通用网易云接口实现一致。
 	payload := map[string]string{
 		"id": strconv.FormatInt(songID, 10),
 		"cp": "false", "lv": "0", "kv": "0", "tv": "0", "rv": "0", "yv": "0", "ytv": "0", "yrc": "0",
