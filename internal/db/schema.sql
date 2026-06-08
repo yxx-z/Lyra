@@ -20,6 +20,7 @@ CREATE TABLE albums (
     genre        TEXT,
     cover_path   TEXT,
     mbid         TEXT UNIQUE,
+    scrape_status TEXT DEFAULT 'pending',
     created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -74,4 +75,5 @@ CREATE INDEX idx_tracks_album         ON tracks(album_id);
 CREATE INDEX idx_tracks_artist        ON tracks(artist_id);
 CREATE INDEX idx_tracks_scrape_status ON tracks(scrape_status);
 CREATE INDEX idx_albums_artist        ON albums(artist_id);
+CREATE INDEX idx_albums_scrape_status ON albums(scrape_status);
 CREATE INDEX idx_tracks_available  ON tracks(is_available);

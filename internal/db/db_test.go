@@ -57,3 +57,21 @@ func TestOpen_TracksHasIsAvailableColumn(t *testing.T) {
 		t.Errorf("is_available 列不存在: %v", err)
 	}
 }
+
+func TestOpen_AlbumsHasScrapeStatusColumn(t *testing.T) {
+	dir := t.TempDir()
+	db, err := Open(dir + "/test.db")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer db.Close()
+
+	rows, err := db.Query(`SELECT name FROM pragma_table_info('albums') WHERE name='scrape_status'`)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		t.Fatal("albums 表应有 scrape_status 列")
+	}
+}
