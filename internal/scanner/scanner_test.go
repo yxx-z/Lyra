@@ -22,7 +22,7 @@ func newTestScanner(t *testing.T, paths []string) *Scanner {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	return NewScanner(d, config.LibraryConfig{Paths: paths}, "", nil, false)
+	return NewScanner(d, config.LibraryConfig{Paths: paths}, "", nil, nil, false)
 }
 
 func TestNewScanner_NotRunning(t *testing.T) {
@@ -105,7 +105,7 @@ func TestDoScan_ScrapePhase_MarksDone(t *testing.T) {
 	t.Cleanup(func() { d.Close() })
 
 	svc := lyrics.NewLyricsService(d, scanStubProvider{res: lyrics.Result{LRCContent: "[00:01.00]hi", Source: "lrclib"}})
-	s := NewScanner(d, config.LibraryConfig{Paths: []string{dir}}, "", svc, true)
+	s := NewScanner(d, config.LibraryConfig{Paths: []string{dir}}, "", svc, nil, true)
 	defer s.Stop()
 
 	s.TriggerScan()
@@ -137,4 +137,17 @@ type scanStubProvider struct {
 func (p scanStubProvider) Name() string { return "stub" }
 func (p scanStubProvider) Fetch(_ context.Context, _ lyrics.Query) (lyrics.Result, error) {
 	return p.res, p.err
+}
+
+func TestScanStatus_HasAlbumsScraped(t *testing.T) {
+	d, err := db.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	s := NewScanner(d, config.LibraryConfig{}, "", nil, nil, false)
+	st := s.Status()
+	if st.AlbumsScraped != 0 {
+		t.Errorf("初始 AlbumsScraped 应为 0，得到 %d", st.AlbumsScraped)
+	}
 }

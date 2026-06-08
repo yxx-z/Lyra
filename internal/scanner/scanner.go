@@ -12,6 +12,7 @@ import (
 
 	"github.com/yxx-z/lyra/internal/config"
 	"github.com/yxx-z/lyra/internal/lyrics"
+	"github.com/yxx-z/lyra/internal/metadata"
 )
 
 // ErrScanInProgress is returned by TriggerScan when a scan is already running.
@@ -26,6 +27,7 @@ type ScanStatus struct {
 	StartedAt     time.Time `json:"started_at"`
 	Phase         string    `json:"phase"`
 	LyricsScraped int64     `json:"lyrics_scraped"`
+	AlbumsScraped int64     `json:"albums_scraped"`
 }
 
 // Scanner orchestrates directory walking, tag reading, and DB ingestion.
@@ -35,8 +37,9 @@ type Scanner struct {
 	ing         *Ingester
 	ffprobePath string
 
-	lyricsService *lyrics.LyricsService
-	scrapeEnabled bool
+	lyricsService   *lyrics.LyricsService
+	metadataService *metadata.MetadataService
+	scrapeEnabled   bool
 
 	running   atomic.Bool
 	total     atomic.Int64
@@ -44,6 +47,7 @@ type Scanner struct {
 	errors    atomic.Int64
 
 	lyricsScraped atomic.Int64
+	albumsScraped atomic.Int64
 	phase         atomic.Value // string
 
 	mu             sync.RWMutex
@@ -56,15 +60,16 @@ type Scanner struct {
 }
 
 // NewScanner creates a Scanner. Call Start to begin scanning.
-func NewScanner(db *sql.DB, cfg config.LibraryConfig, ffprobePath string, lyricsService *lyrics.LyricsService, scrapeEnabled bool) *Scanner {
+func NewScanner(db *sql.DB, cfg config.LibraryConfig, ffprobePath string, lyricsService *lyrics.LyricsService, metadataService *metadata.MetadataService, scrapeEnabled bool) *Scanner {
 	s := &Scanner{
-		db:            db,
-		cfg:           cfg,
-		ing:           NewIngester(db),
-		ffprobePath:   ffprobePath,
-		lyricsService: lyricsService,
-		scrapeEnabled: scrapeEnabled,
-		stopCh:        make(chan struct{}),
+		db:              db,
+		cfg:             cfg,
+		ing:             NewIngester(db),
+		ffprobePath:     ffprobePath,
+		lyricsService:   lyricsService,
+		metadataService: metadataService,
+		scrapeEnabled:   scrapeEnabled,
+		stopCh:          make(chan struct{}),
 	}
 	s.phase.Store("idle")
 	return s
@@ -129,6 +134,7 @@ func (s *Scanner) Status() ScanStatus {
 		StartedAt:     startedAt,
 		Phase:         phase,
 		LyricsScraped: s.lyricsScraped.Load(),
+		AlbumsScraped: s.albumsScraped.Load(),
 	}
 }
 
@@ -147,6 +153,7 @@ func (s *Scanner) doScan() {
 	s.processed.Store(0)
 	s.errors.Store(0)
 	s.lyricsScraped.Store(0)
+	s.albumsScraped.Store(0)
 	s.phase.Store("scanning")
 	s.mu.Lock()
 	s.startedAt = time.Now()
@@ -210,6 +217,10 @@ func (s *Scanner) doScan() {
 		s.phase.Store("scraping")
 		s.scrapePending(ctx)
 	}
+	if s.scrapeEnabled && s.metadataService != nil {
+		s.phase.Store("metadata")
+		s.scrapeAlbumsPending(ctx)
+	}
 	s.phase.Store("idle")
 }
 
@@ -262,5 +273,48 @@ func (s *Scanner) scrapePending(ctx context.Context) {
 
 	// 修复 3：结束日志
 	slog.Info("后台歌词刮削结束", "成功", s.lyricsScraped.Load())
+}
+
+func (s *Scanner) scrapeAlbumsPending(ctx context.Context) {
+	rows, err := s.db.Query(`SELECT id FROM albums WHERE scrape_status='pending'`)
+	if err != nil {
+		return
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		slog.Warn("元数据阶段遍历待处理专辑出错", "err", err)
+	}
+	if len(ids) == 0 {
+		return
+	}
+	slog.Info("开始后台专辑元数据刮削", "待处理", len(ids))
+
+	for _, id := range ids {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		outcome, err := s.metadataService.EnrichAlbum(ctx, id)
+		if err != nil || outcome.Status == "failed" {
+			s.errors.Add(1)
+		} else if outcome.Status == "done" {
+			s.albumsScraped.Add(1)
+		}
+		// MusicBrainz 限速 1 req/s：每张专辑后固定等待 ≥1s（可被 ctx 中断）。
+		select {
+		case <-time.After(1100 * time.Millisecond):
+		case <-ctx.Done():
+			return
+		}
+	}
+	slog.Info("后台专辑元数据刮削结束", "成功", s.albumsScraped.Load())
 }
 
