@@ -1,6 +1,15 @@
 package metadata
 
-import "errors"
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+)
 
 // ErrNotFound 表示未匹配到合适的 release。
 var ErrNotFound = errors.New("未匹配到专辑")
@@ -64,4 +73,72 @@ func absDiff(a, b int) int {
 		return a - b
 	}
 	return b - a
+}
+
+const mbDefaultBaseURL = "https://musicbrainz.org"
+
+// MusicBrainzClient 查询 MusicBrainz WS/2 release 搜索接口。
+type MusicBrainzClient struct {
+	baseURL    string
+	userAgent  string
+	httpClient *http.Client
+}
+
+// NewMusicBrainzClient 创建客户端；baseURL 空用默认，httpClient 空用 10s 超时。
+func NewMusicBrainzClient(baseURL, userAgent string, httpClient *http.Client) *MusicBrainzClient {
+	if strings.TrimSpace(baseURL) == "" {
+		baseURL = mbDefaultBaseURL
+	}
+	if strings.TrimSpace(userAgent) == "" {
+		userAgent = "Lyra/0.1 (https://github.com/yxx-z/Lyra)"
+	}
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 10 * time.Second}
+	}
+	return &MusicBrainzClient{
+		baseURL:    strings.TrimRight(baseURL, "/"),
+		userAgent:  userAgent,
+		httpClient: httpClient,
+	}
+}
+
+// Search 按艺术家+专辑查询，返回择优后的 release；无匹配返回 ErrNotFound。
+func (c *MusicBrainzClient) Search(ctx context.Context, q AlbumQuery) (ReleaseMatch, error) {
+	lucene := fmt.Sprintf(`artist:"%s" AND release:"%s"`,
+		sanitizeLucene(q.ArtistName), sanitizeLucene(q.AlbumTitle))
+	endpoint := c.baseURL + "/ws/2/release/?query=" + url.QueryEscape(lucene) + "&fmt=json&limit=25"
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return ReleaseMatch{}, err
+	}
+	req.Header.Set("User-Agent", c.userAgent)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return ReleaseMatch{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return ReleaseMatch{}, fmt.Errorf("musicbrainz status %d", resp.StatusCode)
+	}
+
+	var payload struct {
+		Releases []mbRelease `json:"releases"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return ReleaseMatch{}, fmt.Errorf("musicbrainz 解码失败: %w", err)
+	}
+
+	r, ok := pickRelease(payload.Releases, q.TrackCount)
+	if !ok {
+		return ReleaseMatch{}, ErrNotFound
+	}
+	return ReleaseMatch{MBID: r.ID, Title: r.Title, ReleaseDate: r.Date}, nil
+}
+
+// sanitizeLucene 去除可能破坏 Lucene 查询的双引号。
+func sanitizeLucene(s string) string {
+	return strings.ReplaceAll(s, `"`, "")
 }

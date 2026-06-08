@@ -1,6 +1,12 @@
 package metadata
 
-import "testing"
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
 
 func TestPickRelease_ClosestTrackCount(t *testing.T) {
 	rs := []mbRelease{
@@ -40,5 +46,54 @@ func TestPickRelease_UnknownLocalCountTakesFirst(t *testing.T) {
 	got, ok := pickRelease(rs, 0)
 	if !ok || got.ID != "first" {
 		t.Fatalf("localCount=0 应取靠前者，得到 %q", got.ID)
+	}
+}
+
+func newTestMB(srv *httptest.Server) *MusicBrainzClient {
+	c := NewMusicBrainzClient("", "Lyra-Test/0.1", srv.Client())
+	c.baseURL = srv.URL
+	return c
+}
+
+func TestMBSearch_Hit(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"releases":[
+			{"id":"mbid-11","score":100,"title":"叶惠美","date":"2003-07-31","track-count":11},
+			{"id":"mbid-22","score":100,"title":"叶惠美","date":"2008-01-23","track-count":22}
+		]}`))
+	}))
+	defer srv.Close()
+
+	m, err := newTestMB(srv).Search(context.Background(), AlbumQuery{AlbumTitle: "叶惠美", ArtistName: "周杰伦", TrackCount: 11})
+	if err != nil {
+		t.Fatalf("Search err: %v", err)
+	}
+	if m.MBID != "mbid-11" {
+		t.Errorf("应选 11 首的 release，得到 %q", m.MBID)
+	}
+	if m.ReleaseDate != "2003-07-31" {
+		t.Errorf("ReleaseDate = %q", m.ReleaseDate)
+	}
+}
+
+func TestMBSearch_NoMatch(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"releases":[{"id":"x","score":40,"title":"别的","track-count":5}]}`))
+	}))
+	defer srv.Close()
+	_, err := newTestMB(srv).Search(context.Background(), AlbumQuery{AlbumTitle: "叶惠美", ArtistName: "周杰伦", TrackCount: 11})
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("低 score 应返回 ErrNotFound，得到 %v", err)
+	}
+}
+
+func TestMBSearch_ServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	_, err := newTestMB(srv).Search(context.Background(), AlbumQuery{AlbumTitle: "x", ArtistName: "y", TrackCount: 1})
+	if err == nil || errors.Is(err, ErrNotFound) {
+		t.Errorf("500 应返回普通 error，得到 %v", err)
 	}
 }
