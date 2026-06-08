@@ -303,6 +303,8 @@ func (s *Scanner) scrapeAlbumsPending(ctx context.Context) {
 		default:
 		}
 		outcome, err := s.metadataService.EnrichAlbum(ctx, id)
+		// EnrichAlbum 透传 MB 瞬时错误（网络/5xx）时不改 scrape_status，
+		// 专辑保持 'pending'，下次扫描自动重试；仅 "failed"（无匹配）会被持久化。
 		if err != nil || outcome.Status == "failed" {
 			s.errors.Add(1)
 		} else if outcome.Status == "done" {

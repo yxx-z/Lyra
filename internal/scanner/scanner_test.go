@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,6 +15,7 @@ import (
 	"github.com/yxx-z/lyra/internal/config"
 	"github.com/yxx-z/lyra/internal/db"
 	"github.com/yxx-z/lyra/internal/lyrics"
+	"github.com/yxx-z/lyra/internal/metadata"
 )
 
 func newTestScanner(t *testing.T, paths []string) *Scanner {
@@ -149,5 +152,62 @@ func TestScanStatus_HasAlbumsScraped(t *testing.T) {
 	st := s.Status()
 	if st.AlbumsScraped != 0 {
 		t.Errorf("初始 AlbumsScraped 应为 0，得到 %d", st.AlbumsScraped)
+	}
+}
+
+func TestScrapeAlbumsPending_CountsDoneAlbums(t *testing.T) {
+	d, err := db.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+
+	// 插入一个艺术家、一张 pending 专辑和一条可用曲目（供 EnrichAlbum 的 track-count 子查询）
+	if _, err := d.Exec(`INSERT INTO artists(id,name) VALUES('ar1','测试艺术家')`); err != nil {
+		t.Fatalf("insert artist: %v", err)
+	}
+	if _, err := d.Exec(`INSERT INTO albums(id,title,artist_id,scrape_status) VALUES('al1','测试专辑','ar1','pending')`); err != nil {
+		t.Fatalf("insert album: %v", err)
+	}
+	if _, err := d.Exec(`INSERT INTO tracks(id,title,album_id,artist_id,file_path,is_available) VALUES('tr1','曲1','al1','ar1','/m/a.flac',1)`); err != nil {
+		t.Fatalf("insert track: %v", err)
+	}
+
+	// MB 服务端：返回 score>=90、track-count=1 的 release
+	mb := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"releases":[{"id":"mbid-x","score":100,"date":"2003","track-count":1}]}`))
+	}))
+	t.Cleanup(mb.Close)
+
+	// CAA 服务端：返回 404（无封面），EnrichAlbum 仍会置 status="done"
+	caa := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(caa.Close)
+
+	metaSvc := metadata.NewMetadataService(
+		d,
+		metadata.NewMusicBrainzClient(mb.URL, "T/0.1", nil),
+		metadata.NewCoverArtClient(caa.URL, nil),
+		t.TempDir(),
+	)
+
+	// 直接构造 scanner，不需要文件系统路径
+	s := NewScanner(d, config.LibraryConfig{}, "", nil, metaSvc, true)
+
+	// 直接调用元数据阶段（同包可访问未导出方法），跳过文件扫描
+	s.scrapeAlbumsPending(context.Background())
+
+	// 断言计数
+	if got := s.Status().AlbumsScraped; got != 1 {
+		t.Errorf("AlbumsScraped = %d, want 1", got)
+	}
+
+	// 断言 DB 中专辑状态已更新为 done
+	var status string
+	d.QueryRow(`SELECT scrape_status FROM albums WHERE id='al1'`).Scan(&status)
+	if status != "done" {
+		t.Errorf("scrape_status = %q, want done", status)
 	}
 }
