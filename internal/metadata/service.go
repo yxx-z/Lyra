@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -89,7 +90,7 @@ func (s *MetadataService) downloadCover(ctx context.Context, albumID, mbid strin
 		return false
 	}
 	ext := ".jpg"
-	if mime == "image/png" {
+	if strings.HasPrefix(mime, "image/png") {
 		ext = ".png"
 	}
 	if err := os.MkdirAll(s.artworkDir, 0o755); err != nil {

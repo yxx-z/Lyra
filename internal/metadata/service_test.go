@@ -124,3 +124,29 @@ func TestEnrichAlbum_AlbumNotFound(t *testing.T) {
 		t.Errorf("不存在的专辑应 ErrAlbumNotFound，得到 %v", err)
 	}
 }
+
+func TestEnrichAlbum_MBError(t *testing.T) {
+	database, id := setupAlbum(t, 11)
+	mb := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	t.Cleanup(mb.Close)
+	caa := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(caa.Close)
+
+	_, err := newSvc(t, database, mb.URL, caa.URL, t.TempDir()).EnrichAlbum(context.Background(), id)
+	if err == nil {
+		t.Fatal("MB 500 应返回非 nil error")
+	}
+	if errors.Is(err, ErrAlbumNotFound) {
+		t.Error("不应是 ErrAlbumNotFound")
+	}
+	// 状态不应被置为 done
+	var status string
+	database.QueryRow(`SELECT scrape_status FROM albums WHERE id=?`, id).Scan(&status)
+	if status == "done" {
+		t.Error("MB 异常时状态不应为 done")
+	}
+}

@@ -55,7 +55,7 @@ func (c *CoverArtClient) FetchFront(ctx context.Context, releaseMBID string) ([]
 		return nil, "", fmt.Errorf("coverartarchive status %d", resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20)) // 上限 10MB，防止超大响应耗尽内存
 	if err != nil {
 		return nil, "", err
 	}
