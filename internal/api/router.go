@@ -60,11 +60,12 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 		r.Put("/tracks/{id}/lyrics", lyrics.PutLyrics)
 		r.Delete("/tracks/{id}/lyrics", lyrics.DeleteLyrics)
 
-		lyricsService := lyricspkg.NewLyricsService(
-			db,
-			lyricspkg.NewEmbeddedProvider(),
-			lyricspkg.NewLRCLIBClient("https://lrclib.net", cfg.Scraper.MusicBrainz.UserAgent, nil),
-		)
+		providers := []lyricspkg.Provider{lyricspkg.NewEmbeddedProvider()}
+		if cfg.Scraper.Netease.Enabled {
+			providers = append(providers, lyricspkg.NewNeteaseProvider(nil))
+		}
+		providers = append(providers, lyricspkg.NewLRCLIBClient("https://lrclib.net", cfg.Scraper.MusicBrainz.UserAgent, nil))
+		lyricsService := lyricspkg.NewLyricsService(db, providers...)
 		scrape := v1.NewScrapeHandler(lyricsService)
 		r.Post("/tracks/{id}/scrape", scrape.ScrapeTrack)
 

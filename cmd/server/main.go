@@ -65,11 +65,12 @@ func main() {
 		slog.Warn("auth.password 未设置，请在 config.yaml 中配置登录密码")
 	}
 
-	lyricsService := lyrics.NewLyricsService(
-		database,
-		lyrics.NewEmbeddedProvider(),
-		lyrics.NewLRCLIBClient("https://lrclib.net", cfg.Scraper.MusicBrainz.UserAgent, nil),
-	)
+	lyricsProviders := []lyrics.Provider{lyrics.NewEmbeddedProvider()}
+	if cfg.Scraper.Netease.Enabled {
+		lyricsProviders = append(lyricsProviders, lyrics.NewNeteaseProvider(nil))
+	}
+	lyricsProviders = append(lyricsProviders, lyrics.NewLRCLIBClient("https://lrclib.net", cfg.Scraper.MusicBrainz.UserAgent, nil))
+	lyricsService := lyrics.NewLyricsService(database, lyricsProviders...)
 	sc := scanner.NewScanner(database, cfg.Library, cfg.Transcode.FfprobePath, lyricsService, cfg.Scraper.Enabled)
 	if err := sc.Start(); err != nil {
 		slog.Error("启动扫描器失败", "err", err)
