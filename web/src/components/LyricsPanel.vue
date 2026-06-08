@@ -51,7 +51,7 @@
         </div>
 
         <!-- B. 无歌词/纯器乐兜底容错 -->
-        <div v-else-if="error === 'no_lyrics' || lrcLines.length === 0" class="empty-state" style="border: 0; background: transparent; height: 100%;">
+        <div v-else-if="error === 'no_lyrics' || (lrcLines.length === 0 && yrcLines.length === 0)" class="empty-state" style="border: 0; background: transparent; height: 100%;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width: 44px; height: 44px; margin-bottom: 16px; color: var(--text-dim); opacity: 0.6;">
             <path d="M9 18V5l12-2v13" />
             <circle cx="6" cy="18" r="3" />
@@ -70,6 +70,27 @@
             <span>{{ scraping ? '正在获取歌词…' : '🔍 获取歌词' }}</span>
           </button>
           <p v-if="scrapeMessage" class="muted" style="font-size: 12px; margin-top: 10px;">{{ scrapeMessage }}</p>
+        </div>
+
+        <!-- C0. YRC 逐字扫光面板 -->
+        <div v-else-if="yrcLines.length > 0" ref="scrollerRef" class="lyrics-scroller">
+          <button
+            v-for="(line, idx) in yrcLines"
+            :key="idx"
+            :class="{ active: idx === yrcCurrentLine }"
+            class="lyric-line"
+            type="button"
+            @click="seekToLine(line.start)"
+          >
+            <span
+              v-for="(word, widx) in line.words"
+              :key="widx"
+              class="yrc-word"
+              :style="idx === yrcCurrentLine
+                ? { backgroundSize: wordFillPercent(word, playerStore.currentTime) + '% 100%' }
+                : { backgroundSize: '0% 100%' }"
+            >{{ word.text }}</span>
+          </button>
         </div>
 
         <!-- C. 标准滚动歌词面板 -->
@@ -101,6 +122,9 @@ interface LyricLine {
   text: string
 }
 
+interface YrcWord { start: number; end: number; text: string }
+interface YrcLineData { start: number; end: number; words: YrcWord[] }
+
 const props = defineProps<{
   isOpen: boolean
   api: ApiClient // 共享父组件配置好的 Api 实例
@@ -120,6 +144,8 @@ const scraping = ref(false)
 const scrapeMessage = ref('')
 // 是否带时间轴（可滚动同步 + 点击跳转）；纯文本歌词为 false，静态展示
 const synced = ref(false)
+// YRC 逐字歌词（优先于 LRC）；非空即进入逐字扫光模式
+const yrcLines = ref<YrcLineData[]>([])
 
 const subtitle = computed(() => {
   if (!playerStore.currentTrack) return ''
@@ -175,14 +201,24 @@ async function loadLyrics() {
   isLoading.value = true
   error.value = null
   lrcLines.value = []
+  yrcLines.value = []
   coverBroken.value = false
   scrapeMessage.value = ''
 
   try {
     const res = await props.api.getLyrics(track.trackId)
-    if (res.has_lrc && res.lrc_content) {
+    if (res.has_yrc && res.yrc_content) {
+      try {
+        const doc = JSON.parse(res.yrc_content) as { lines: YrcLineData[] }
+        yrcLines.value = Array.isArray(doc.lines) ? doc.lines : []
+      } catch {
+        yrcLines.value = []
+      }
+    }
+    if (yrcLines.value.length === 0 && res.has_lrc && res.lrc_content) {
       lrcLines.value = parseLrc(res.lrc_content)
-    } else {
+    }
+    if (yrcLines.value.length === 0 && lrcLines.value.length === 0) {
       error.value = 'no_lyrics'
     }
   } catch (err) {
@@ -224,6 +260,24 @@ async function handleScrape() {
   }
 }
 
+// 单字填充百分比（0~100），用于扫光渐变
+function wordFillPercent(word: YrcWord, time: number): number {
+  if (time <= word.start) return 0
+  if (time >= word.end || word.end <= word.start) return 100
+  return ((time - word.start) / (word.end - word.start)) * 100
+}
+
+// 当前 YRC 行索引（currentTime 落在哪行）
+const yrcCurrentLine = computed(() => {
+  const time = playerStore.currentTime
+  let idx = 0
+  for (let i = 0; i < yrcLines.value.length; i++) {
+    if (time >= yrcLines.value[i].start) idx = i
+    else break
+  }
+  return idx
+})
+
 // 卡拉OK级时间轴查找锁定
 function syncLyricsIndex() {
   if (!synced.value || lrcLines.value.length === 0) return
@@ -257,7 +311,8 @@ function scrollToActiveLine() {
 
 // 歌词点击跳转播放 (Seek-on-Click)；纯文本歌词无时间轴，不可跳转
 function seekToLine(time: number) {
-  if (!synced.value || time < 0) return
+  if (time < 0) return
+  if (!synced.value && yrcLines.value.length === 0) return
   playerStore.seek(time)
   // 跳转时间后，瞬间自我强行校正高亮，提供绝对顺畅对齐
   syncLyricsIndex()
@@ -265,7 +320,10 @@ function seekToLine(time: number) {
 
 // 侦听歌曲时间更新以滚动
 watch(() => playerStore.currentTime, () => {
-  if (props.isOpen) {
+  if (!props.isOpen) return
+  if (yrcLines.value.length > 0) {
+    scrollToActiveLine()
+  } else {
     syncLyricsIndex()
   }
 })
@@ -295,5 +353,19 @@ watch(() => props.isOpen, (newVal) => {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* YRC 逐字扫光：渐变从左到右填充，未填充部分为暗淡色 */
+.yrc-word {
+  background-image: linear-gradient(to right, var(--text, #fff) 50%, var(--text-dim, rgba(255,255,255,0.35)) 50%);
+  background-size: 0% 100%;
+  background-repeat: no-repeat;
+  background-position: left center;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--text-dim, rgba(255,255,255,0.35));
+  transition: background-size 0.1s linear;
+  white-space: pre;
 }
 </style>
