@@ -62,6 +62,20 @@ func (h *CoverHandler) getCover(w http.ResponseWriter, r *http.Request, albumID 
 		return
 	}
 
+	// 刮削封面兜底：内嵌与本地都没有时，用 albums.cover_path 指向的缓存文件。
+	var coverPath sql.NullString
+	if err := h.db.QueryRow(`SELECT cover_path FROM albums WHERE id=?`, albumID).Scan(&coverPath); err == nil && coverPath.Valid && coverPath.String != "" {
+		if data, rerr := os.ReadFile(coverPath.String); rerr == nil && len(data) > 0 {
+			mimeType := "image/jpeg"
+			if strings.HasSuffix(strings.ToLower(coverPath.String), ".png") {
+				mimeType = "image/png"
+			}
+			w.Header().Set("Content-Type", mimeType)
+			_, _ = w.Write(data)
+			return
+		}
+	}
+
 	http.NotFound(w, r)
 }
 

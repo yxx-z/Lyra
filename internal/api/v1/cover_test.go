@@ -53,3 +53,38 @@ func TestGetCover_NotFound(t *testing.T) {
 		t.Errorf("want 404, got %d", w.Code)
 	}
 }
+
+func TestGetCover_CoverPathFallback(t *testing.T) {
+	d := newTestDB(t)
+
+	dir := t.TempDir()
+	coverFile := filepath.Join(dir, "scraped.jpg")
+	if err := os.WriteFile(coverFile, []byte("\xff\xd8\xffJPEG"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := d.Exec(`INSERT INTO artists(id,name) VALUES('ar','A')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(`INSERT INTO albums(id,title,artist_id,cover_path) VALUES('al','T','ar',?)`, coverFile); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(
+		`INSERT INTO tracks(id,title,artist_id,album_id,file_path,format,is_available,scrape_status) VALUES('tr','t','ar','al',?,'',1,'pending')`,
+		filepath.Join(dir, "song.flac"),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	h := NewCoverHandler(d)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/cover/al", nil)
+	h.getCover(w, req, "al")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("应 200，得到 %d", w.Code)
+	}
+	if w.Body.Len() == 0 {
+		t.Error("应返回封面字节")
+	}
+}
