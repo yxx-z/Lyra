@@ -1,6 +1,13 @@
 package lyrics
 
-import "testing"
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
 
 func TestPickMatch(t *testing.T) {
 	songs := []neteaseSong{
@@ -35,5 +42,90 @@ func TestPickMatch_TitleNotContained(t *testing.T) {
 func TestNormalizeText(t *testing.T) {
 	if got := normalizeText("　Ｈｅｌｌｏ   World "); got != "hello world" {
 		t.Errorf("normalizeText = %q, want %q", got, "hello world")
+	}
+}
+
+// newTestProvider 返回指向 httptest server 的 NeteaseProvider。
+func newTestProvider(srv *httptest.Server) *NeteaseProvider {
+	p := NewNeteaseProvider(srv.Client())
+	p.baseURL = srv.URL
+	return p
+}
+
+func TestNeteaseFetch_Hit(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/eapi/cloudsearch/pc"):
+			w.Write([]byte(`{"result":{"songs":[{"id":2,"name":"晴天","dt":269000,"ar":[{"name":"周杰伦"}]}]}}`))
+		case strings.Contains(r.URL.Path, "/eapi/song/lyric/v1"):
+			w.Write([]byte(`{"lrc":{"lyric":"[00:01.00]普通歌词"},"yrc":{"lyric":"[1000,1000](1000,1000,0)字"}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	p := newTestProvider(srv)
+	res, err := p.Fetch(context.Background(), Query{TrackName: "晴天", ArtistName: "周杰伦", Duration: 269})
+	if err != nil {
+		t.Fatalf("Fetch err: %v", err)
+	}
+	if res.Source != "netease" {
+		t.Errorf("Source = %q, want netease", res.Source)
+	}
+	if !strings.Contains(res.LRCContent, "普通歌词") {
+		t.Errorf("LRCContent 缺失: %q", res.LRCContent)
+	}
+	if !strings.Contains(res.YRCContent, `"words"`) {
+		t.Errorf("YRCContent 应为归一化 JSON: %q", res.YRCContent)
+	}
+}
+
+func TestNeteaseFetch_NoMatch(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"result":{"songs":[{"id":9,"name":"别的歌","dt":100000,"ar":[{"name":"X"}]}]}}`))
+	}))
+	defer srv.Close()
+	p := newTestProvider(srv)
+	_, err := p.Fetch(context.Background(), Query{TrackName: "晴天", ArtistName: "周杰伦", Duration: 269})
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("无匹配应返回 ErrNotFound，得到 %v", err)
+	}
+}
+
+func TestNeteaseFetch_EmptyLyric(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/eapi/cloudsearch/pc"):
+			w.Write([]byte(`{"result":{"songs":[{"id":2,"name":"晴天","dt":269000,"ar":[{"name":"周杰伦"}]}]}}`))
+		default:
+			w.Write([]byte(`{"lrc":{"lyric":""},"yrc":{"lyric":""}}`))
+		}
+	}))
+	defer srv.Close()
+	p := newTestProvider(srv)
+	_, err := p.Fetch(context.Background(), Query{TrackName: "晴天", ArtistName: "周杰伦", Duration: 269})
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("空歌词应返回 ErrNotFound，得到 %v", err)
+	}
+}
+
+func TestNeteaseFetch_InvalidQuery(t *testing.T) {
+	p := NewNeteaseProvider(nil)
+	_, err := p.Fetch(context.Background(), Query{TrackName: "", ArtistName: "x", Duration: 100})
+	if !errors.Is(err, ErrInvalidQuery) {
+		t.Errorf("缺曲名应返回 ErrInvalidQuery，得到 %v", err)
+	}
+}
+
+func TestNeteaseFetch_ServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	p := newTestProvider(srv)
+	_, err := p.Fetch(context.Background(), Query{TrackName: "晴天", ArtistName: "周杰伦", Duration: 269})
+	if err == nil || errors.Is(err, ErrNotFound) {
+		t.Errorf("服务端 500 应返回普通 error（非 ErrNotFound），得到 %v", err)
 	}
 }
