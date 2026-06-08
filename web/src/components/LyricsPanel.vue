@@ -77,7 +77,7 @@
           <button
             v-for="(line, idx) in lrcLines"
             :key="idx"
-            :class="{ active: idx === currentLineIndex }"
+            :class="{ active: idx === currentLineIndex, 'is-static': !synced }"
             class="lyric-line"
             type="button"
             @click="seekToLine(line.time)"
@@ -118,6 +118,8 @@ const error = ref<string | null>(null)
 const currentLineIndex = ref(-1)
 const scraping = ref(false)
 const scrapeMessage = ref('')
+// 是否带时间轴（可滚动同步 + 点击跳转）；纯文本歌词为 false，静态展示
+const synced = ref(false)
 
 const subtitle = computed(() => {
   if (!playerStore.currentTrack) return ''
@@ -125,8 +127,12 @@ const subtitle = computed(() => {
 })
 
 // LRC 歌词解析高精度正则算法 (支持一行多时间归集)
+// 副作用：根据是否解析出时间轴，设置 synced（决定能否滚动同步/点击跳转）
 function parseLrc(lrcText: string): LyricLine[] {
-  if (!lrcText) return []
+  if (!lrcText) {
+    synced.value = false
+    return []
+  }
   const lines = lrcText.split('\n')
   const result: LyricLine[] = []
   const timeRegex = /\[(\d+):(\d+)(?:\.(\d+))?\]/g
@@ -144,8 +150,18 @@ function parseLrc(lrcText: string): LyricLine[] {
     }
   }
 
-  // 严格按时间点升序排序，保证对焦不跳跃
-  return result.sort((a, b) => a.time - b.time)
+  if (result.length > 0) {
+    synced.value = true
+    // 严格按时间点升序排序，保证对焦不跳跃
+    return result.sort((a, b) => a.time - b.time)
+  }
+
+  // 纯文本回退（如内嵌标签歌词，无时间轴）：逐行静态展示
+  synced.value = false
+  return lines
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+    .map((l) => ({ time: -1, text: l }))
 }
 
 // 动态拉取歌词
@@ -192,7 +208,7 @@ async function handleScrape() {
     if (res.status === 'done' || res.status === 'skipped') {
       await loadLyrics()
       if (lrcLines.value.length === 0) {
-        scrapeMessage.value = '已获取，但该曲目无可显示的同步歌词'
+        scrapeMessage.value = '未找到可显示的歌词'
       }
     } else {
       scrapeMessage.value = '未找到歌词'
@@ -210,7 +226,7 @@ async function handleScrape() {
 
 // 卡拉OK级时间轴查找锁定
 function syncLyricsIndex() {
-  if (lrcLines.value.length === 0) return
+  if (!synced.value || lrcLines.value.length === 0) return
   const time = playerStore.currentTime
   let index = -1
 
@@ -239,8 +255,9 @@ function scrollToActiveLine() {
   })
 }
 
-// 歌词点击跳转播放 (Seek-on-Click)
+// 歌词点击跳转播放 (Seek-on-Click)；纯文本歌词无时间轴，不可跳转
 function seekToLine(time: number) {
+  if (!synced.value || time < 0) return
   playerStore.seek(time)
   // 跳转时间后，瞬间自我强行校正高亮，提供绝对顺畅对齐
   syncLyricsIndex()
@@ -270,6 +287,10 @@ watch(() => props.isOpen, (newVal) => {
 <style scoped>
 .animate-spin {
   animation: spin 1.2s linear infinite;
+}
+/* 纯文本歌词无时间轴，非交互：默认光标、不高亮 */
+.lyric-line.is-static {
+  cursor: default;
 }
 @keyframes spin {
   from { transform: rotate(0deg); }
