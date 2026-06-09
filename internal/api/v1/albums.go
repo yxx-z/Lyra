@@ -12,15 +12,26 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// yearFromReleaseDate 取 release_date 前 4 位为年份；兼容 "2003" 与 "2003-07-31"。
+func yearFromReleaseDate(releaseDate string) int {
+	if len(releaseDate) < 4 {
+		return 0
+	}
+	y, _ := strconv.Atoi(releaseDate[:4])
+	return y
+}
+
 // AlbumSummary is returned in album list responses.
 type AlbumSummary struct {
-	ID         string `json:"id"`
-	Title      string `json:"title"`
-	Artist     string `json:"artist"`
-	ArtistID   string `json:"artist_id"`
-	Year       int    `json:"year"`
-	TrackCount int    `json:"track_count"`
-	CoverURL   string `json:"cover_url"`
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Artist      string `json:"artist"`
+	ArtistID    string `json:"artist_id"`
+	Year        int    `json:"year"`
+	Genre       string `json:"genre"`
+	ReleaseDate string `json:"release_date"`
+	TrackCount  int    `json:"track_count"`
+	CoverURL    string `json:"cover_url"`
 }
 
 // TrackSummary is returned inside an album detail.
@@ -55,7 +66,7 @@ func NewAlbumsHandler(db *sql.DB) *AlbumsHandler {
 func (h *AlbumsHandler) ListAlbums(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Query(`
 		SELECT a.id, a.title, COALESCE(ar.name,''), COALESCE(a.artist_id,''),
-		       COALESCE(a.release_date,''), COUNT(t.id)
+		       COALESCE(a.release_date,''), COALESCE(a.genre,''), COUNT(t.id)
 		FROM albums a
 		LEFT JOIN artists ar ON a.artist_id = ar.id
 		LEFT JOIN tracks t ON t.album_id = a.id AND t.is_available = 1
@@ -71,11 +82,12 @@ func (h *AlbumsHandler) ListAlbums(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var al AlbumSummary
 		var releaseDate string
-		if err := rows.Scan(&al.ID, &al.Title, &al.Artist, &al.ArtistID, &releaseDate, &al.TrackCount); err != nil {
+		if err := rows.Scan(&al.ID, &al.Title, &al.Artist, &al.ArtistID, &releaseDate, &al.Genre, &al.TrackCount); err != nil {
 			slog.Error("扫描专辑失败", "err", err)
 			continue
 		}
-		al.Year, _ = strconv.Atoi(releaseDate)
+		al.ReleaseDate = releaseDate
+		al.Year = yearFromReleaseDate(releaseDate)
 		al.CoverURL = "/api/v1/cover/" + al.ID
 		albums = append(albums, al)
 	}
@@ -99,11 +111,11 @@ func (h *AlbumsHandler) getAlbum(w http.ResponseWriter, r *http.Request, id stri
 	var al AlbumDetail
 	var releaseDate string
 	err := h.db.QueryRow(`
-		SELECT a.id, a.title, COALESCE(ar.name,''), COALESCE(a.artist_id,''), COALESCE(a.release_date,'')
+		SELECT a.id, a.title, COALESCE(ar.name,''), COALESCE(a.artist_id,''), COALESCE(a.release_date,''), COALESCE(a.genre,'')
 		FROM albums a
 		LEFT JOIN artists ar ON a.artist_id = ar.id
 		WHERE a.id = ?`, id).
-		Scan(&al.ID, &al.Title, &al.Artist, &al.ArtistID, &releaseDate)
+		Scan(&al.ID, &al.Title, &al.Artist, &al.ArtistID, &releaseDate, &al.Genre)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			http.NotFound(w, r)
@@ -112,7 +124,8 @@ func (h *AlbumsHandler) getAlbum(w http.ResponseWriter, r *http.Request, id stri
 		writeJSONError(w, http.StatusInternalServerError, "查询失败")
 		return
 	}
-	al.Year, _ = strconv.Atoi(releaseDate)
+	al.ReleaseDate = releaseDate
+	al.Year = yearFromReleaseDate(releaseDate)
 	al.CoverURL = "/api/v1/cover/" + al.ID
 
 	rows, err := h.db.Query(`

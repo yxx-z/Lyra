@@ -73,3 +73,39 @@ func TestGetAlbum_NotFound(t *testing.T) {
 		t.Errorf("want 404, got %d", w.Code)
 	}
 }
+
+func TestGetAlbum_ReturnsGenreAndReleaseDate(t *testing.T) {
+	d := newTestDB(t)
+
+	if _, err := d.Exec(`INSERT INTO artists(id,name) VALUES('ar','周杰伦')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(`INSERT INTO albums(id,title,artist_id,release_date,genre) VALUES('al','叶惠美','ar','2003-07-31','Mandopop')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(`INSERT INTO tracks(id,title,artist_id,album_id,file_path,format,is_available,scrape_status) VALUES('t','晴天','ar','al','/m/a.flac','',1,'done')`); err != nil {
+		t.Fatal(err)
+	}
+
+	h := NewAlbumsHandler(d)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/albums/al", nil)
+	h.getAlbum(w, req, "al")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("应 200，得到 %d", w.Code)
+	}
+	var resp AlbumDetail
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Genre != "Mandopop" {
+		t.Errorf("Genre = %q, want Mandopop", resp.Genre)
+	}
+	if resp.ReleaseDate != "2003-07-31" {
+		t.Errorf("ReleaseDate = %q, want 2003-07-31", resp.ReleaseDate)
+	}
+	if resp.Year != 2003 {
+		t.Errorf("Year = %d, want 2003（应能从完整日期派生）", resp.Year)
+	}
+}
