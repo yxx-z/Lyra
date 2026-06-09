@@ -109,15 +109,15 @@ func (s *LyricsService) UpgradeStaleLyrics(ctx context.Context) (int, error) {
 		}
 		out, err := s.UpgradeToSynced(ctx, c.id)
 		if err != nil {
-			// 瞬时错误（网络/provider 异常）：不标记，下次扫描重试
+			// 瞬时错误（网络/provider 异常）：不标记，下次扫描重试（但仍节流——已消耗一次网络请求）
 			slog.Warn("同步歌词升级失败", "track", c.id, "err", err)
-			continue
+		} else {
+			s.markSyncChecked(c.id)
+			if out.Status == "upgraded" {
+				upgraded++
+			}
 		}
-		s.markSyncChecked(c.id)
-		if out.Status == "upgraded" {
-			upgraded++
-		}
-		// 仅在真打了网络后节流（LRCLIB 限速礼貌）
+		// 任何真实网络尝试后都节流（无论成败），对 LRCLIB 礼貌
 		select {
 		case <-time.After(800 * time.Millisecond):
 		case <-ctx.Done():
