@@ -8,7 +8,7 @@
           {{ status.running ? '正在扫描您的音乐库...' : '音乐扫描仪处于空闲状态' }}
         </h3>
         <p class="muted" style="font-size: 13px;">
-          已处理 {{ status.processed }} 个音频文件 &middot; 累计发现 {{ status.total }} 个曲目资源
+          已处理 {{ status.processed }} 个音频文件 &middot; 累计发现 {{ status.total }} 个曲目资源 &middot; 阶段：{{ phaseLabel }}
         </p>
       </div>
 
@@ -68,6 +68,14 @@
         </dd>
       </div>
       <div class="scan-stats-card">
+        <dt>已刮歌词</dt>
+        <dd style="color: var(--accent);">{{ status.lyrics_scraped }}</dd>
+      </div>
+      <div class="scan-stats-card">
+        <dt>已刮专辑</dt>
+        <dd style="color: var(--accent);">{{ status.albums_scraped }}</dd>
+      </div>
+      <div class="scan-stats-card">
         <dt>扫描启动时间</dt>
         <dd style="font-size: 15px; font-weight: 600; padding: 6px 0; word-break: break-all;">
           {{ startedAt }}
@@ -98,6 +106,19 @@ const percentage = computed(() => {
 const startedAt = computed(() => {
   if (!props.status.started_at || props.status.started_at.startsWith('0001-')) return '-'
   return new Date(props.status.started_at).toLocaleString()
+})
+
+const phaseLabel = computed(() => {
+  switch (props.status.phase) {
+    case 'scanning':
+      return '正在扫描'
+    case 'scraping':
+      return '刮削歌词中'
+    case 'metadata':
+      return '刮削专辑元数据中'
+    default:
+      return '空闲'
+  }
 })
 </script>
 
