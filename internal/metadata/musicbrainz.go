@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -79,9 +81,12 @@ const mbDefaultBaseURL = "https://musicbrainz.org"
 
 // MusicBrainzClient 查询 MusicBrainz WS/2 release 搜索接口。
 type MusicBrainzClient struct {
-	baseURL    string
-	userAgent  string
-	httpClient *http.Client
+	baseURL     string
+	userAgent   string
+	httpClient  *http.Client
+	minInterval time.Duration
+	mu          sync.Mutex
+	lastReqAt   time.Time
 }
 
 // NewMusicBrainzClient 创建客户端；baseURL 空用默认，httpClient 空用 10s 超时。
@@ -96,10 +101,48 @@ func NewMusicBrainzClient(baseURL, userAgent string, httpClient *http.Client) *M
 		httpClient = &http.Client{Timeout: 10 * time.Second}
 	}
 	return &MusicBrainzClient{
-		baseURL:    strings.TrimRight(baseURL, "/"),
-		userAgent:  userAgent,
-		httpClient: httpClient,
+		baseURL:     strings.TrimRight(baseURL, "/"),
+		userAgent:   userAgent,
+		httpClient:  httpClient,
+		minInterval: 1100 * time.Millisecond,
 	}
+}
+
+// throttle 保证任意两次 MB 请求间隔 ≥ minInterval（全局 1 req/s 限速合规）。
+func (c *MusicBrainzClient) throttle(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if d := c.minInterval - time.Since(c.lastReqAt); d > 0 {
+		select {
+		case <-time.After(d):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	c.lastReqAt = time.Now()
+	return nil
+}
+
+// doGet 节流后发 GET，校验状态码，返回响应体。
+func (c *MusicBrainzClient) doGet(ctx context.Context, endpoint string) ([]byte, error) {
+	if err := c.throttle(ctx); err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", c.userAgent)
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("musicbrainz status %d", resp.StatusCode)
+	}
+	return io.ReadAll(resp.Body)
 }
 
 // Search 按艺术家+专辑查询，返回择优后的 release；无匹配返回 ErrNotFound。
@@ -110,29 +153,16 @@ func (c *MusicBrainzClient) Search(ctx context.Context, q AlbumQuery) (ReleaseMa
 		escapeLucene(q.ArtistName), escapeLucene(q.AlbumTitle))
 	endpoint := c.baseURL + "/ws/2/release/?query=" + url.QueryEscape(lucene) + "&fmt=json&limit=25"
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	body, err := c.doGet(ctx, endpoint)
 	if err != nil {
 		return ReleaseMatch{}, err
 	}
-	req.Header.Set("User-Agent", c.userAgent)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return ReleaseMatch{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return ReleaseMatch{}, fmt.Errorf("musicbrainz status %d", resp.StatusCode)
-	}
-
 	var payload struct {
 		Releases []mbRelease `json:"releases"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.Unmarshal(body, &payload); err != nil {
 		return ReleaseMatch{}, fmt.Errorf("musicbrainz 解码失败: %w", err)
 	}
-
 	r, ok := pickRelease(payload.Releases, q.TrackCount)
 	if !ok {
 		return ReleaseMatch{}, ErrNotFound

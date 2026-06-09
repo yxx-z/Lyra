@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMBSearch_QueryUnquotedAndEscaped(t *testing.T) {
@@ -75,6 +76,7 @@ func TestPickRelease_UnknownLocalCountTakesFirst(t *testing.T) {
 func newTestMB(srv *httptest.Server) *MusicBrainzClient {
 	c := NewMusicBrainzClient("", "Lyra-Test/0.1", srv.Client())
 	c.baseURL = srv.URL
+	c.minInterval = 0 // 测试不节流
 	return c
 }
 
@@ -118,5 +120,21 @@ func TestMBSearch_ServerError(t *testing.T) {
 	_, err := newTestMB(srv).Search(context.Background(), AlbumQuery{AlbumTitle: "x", ArtistName: "y", TrackCount: 1})
 	if err == nil || errors.Is(err, ErrNotFound) {
 		t.Errorf("500 应返回普通 error，得到 %v", err)
+	}
+}
+
+func TestMB_Throttle(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"releases":[]}`))
+	}))
+	defer srv.Close()
+	c := NewMusicBrainzClient(srv.URL, "T", srv.Client())
+	c.minInterval = 80 * time.Millisecond
+
+	start := time.Now()
+	_, _ = c.Search(context.Background(), AlbumQuery{AlbumTitle: "a", ArtistName: "b"})
+	_, _ = c.Search(context.Background(), AlbumQuery{AlbumTitle: "a", ArtistName: "b"})
+	if elapsed := time.Since(start); elapsed < 80*time.Millisecond {
+		t.Errorf("两次请求应间隔≥80ms（节流），实际 %v", elapsed)
 	}
 }
