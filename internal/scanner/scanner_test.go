@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yxx-z/lyra/internal/acoustid"
 	"github.com/yxx-z/lyra/internal/config"
 	"github.com/yxx-z/lyra/internal/db"
 	"github.com/yxx-z/lyra/internal/lyrics"
@@ -209,5 +210,37 @@ func TestScrapeAlbumsPending_CountsDoneAlbums(t *testing.T) {
 	d.QueryRow(`SELECT scrape_status FROM albums WHERE id='al1'`).Scan(&status)
 	if status != "done" {
 		t.Errorf("scrape_status = %q, want done", status)
+	}
+}
+
+type fakeFP struct{}
+
+func (fakeFP) Calc(ctx context.Context, path string) (int, string, error) { return 269, "FP", nil }
+
+func TestFingerprintPending_CountsIdentified(t *testing.T) {
+	d, err := db.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if _, err := d.Exec(`INSERT INTO tracks(id,title,file_path,is_available) VALUES('tr','曲','/m/a.flac',1)`); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"status":"ok","results":[{"id":"aid-1","score":0.97,"recordings":[{"id":"mbid-1"}]}]}`))
+	}))
+	defer srv.Close()
+	fpSvc := acoustid.NewFingerprintService(d, fakeFP{}, acoustid.NewAcoustIDClient(srv.URL, "k", srv.Client()))
+	s := NewScanner(d, config.LibraryConfig{}, "", ScrapeServices{Fingerprint: fpSvc}, true)
+
+	s.fingerprintPending(context.Background())
+
+	if got := s.Status().Fingerprinted; got != 1 {
+		t.Errorf("Fingerprinted = %d, want 1", got)
+	}
+	var aid string
+	d.QueryRow(`SELECT COALESCE(acoustid,'') FROM tracks WHERE id='tr'`).Scan(&aid)
+	if aid != "aid-1" {
+		t.Errorf("acoustid 落库 = %q", aid)
 	}
 }

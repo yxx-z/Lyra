@@ -36,6 +36,7 @@ type ScanStatus struct {
 	Phase         string    `json:"phase"`
 	LyricsScraped int64     `json:"lyrics_scraped"`
 	AlbumsScraped int64     `json:"albums_scraped"`
+	Fingerprinted int64     `json:"fingerprinted"`
 }
 
 // Scanner orchestrates directory walking, tag reading, and DB ingestion.
@@ -55,6 +56,7 @@ type Scanner struct {
 
 	lyricsScraped atomic.Int64
 	albumsScraped atomic.Int64
+	fingerprinted atomic.Int64
 	phase         atomic.Value // string
 
 	mu             sync.RWMutex
@@ -141,6 +143,7 @@ func (s *Scanner) Status() ScanStatus {
 		Phase:         phase,
 		LyricsScraped: s.lyricsScraped.Load(),
 		AlbumsScraped: s.albumsScraped.Load(),
+		Fingerprinted: s.fingerprinted.Load(),
 	}
 }
 
@@ -160,6 +163,7 @@ func (s *Scanner) doScan() {
 	s.errors.Store(0)
 	s.lyricsScraped.Store(0)
 	s.albumsScraped.Store(0)
+	s.fingerprinted.Store(0)
 	s.phase.Store("scanning")
 	s.mu.Lock()
 	s.startedAt = time.Now()
@@ -226,6 +230,10 @@ func (s *Scanner) doScan() {
 	if s.scrapeEnabled && s.services.Metadata != nil {
 		s.phase.Store("metadata")
 		s.scrapeAlbumsPending(ctx)
+	}
+	if s.scrapeEnabled && s.services.Fingerprint != nil {
+		s.phase.Store("fingerprint")
+		s.fingerprintPending(ctx)
 	}
 	s.phase.Store("idle")
 }
@@ -324,5 +332,48 @@ func (s *Scanner) scrapeAlbumsPending(ctx context.Context) {
 		}
 	}
 	slog.Info("后台专辑元数据刮削结束", "成功", s.albumsScraped.Load())
+}
+
+func (s *Scanner) fingerprintPending(ctx context.Context) {
+	rows, err := s.db.Query(`SELECT id FROM tracks WHERE acoustid IS NULL AND is_available=1`)
+	if err != nil {
+		return
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		slog.Warn("指纹阶段遍历待识别曲目出错", "err", err)
+	}
+	if len(ids) == 0 {
+		return
+	}
+	slog.Info("开始后台指纹识别", "待处理", len(ids))
+
+	for _, id := range ids {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		outcome, err := s.services.Fingerprint.IdentifyTrack(ctx, id)
+		if err != nil {
+			s.errors.Add(1) // 瞬时错误（fpcalc/网络）：acoustid 留 NULL，下次重试
+		} else if outcome.Status == "identified" {
+			s.fingerprinted.Add(1)
+		}
+		// AcoustID 限速：每曲后等待 ~350ms（可被 ctx 中断）
+		select {
+		case <-time.After(350 * time.Millisecond):
+		case <-ctx.Done():
+			return
+		}
+	}
+	slog.Info("后台指纹识别结束", "成功", s.fingerprinted.Load())
 }
 
