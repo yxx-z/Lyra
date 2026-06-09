@@ -47,8 +47,9 @@ func (s *FingerprintService) IdentifyTrack(ctx context.Context, trackID string) 
 
 	res, err := s.client.Lookup(ctx, dur, fingerprint)
 	if errors.Is(err, ErrNoMatch) {
+		// 标记已尝试-无匹配；持久化失败按瞬时错误返回，留 NULL 下次重试
 		if _, e := s.db.ExecContext(ctx, `UPDATE tracks SET acoustid='' WHERE id=?`, trackID); e != nil {
-			slog.Warn("标记 acoustid 空失败", "track", trackID, "err", e)
+			return IdentifyOutcome{}, e
 		}
 		return IdentifyOutcome{Status: "nomatch"}, nil
 	}
