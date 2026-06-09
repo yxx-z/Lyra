@@ -6,6 +6,8 @@ export type AlbumSummary = {
   artist: string
   artist_id: string
   year: number
+  genre: string
+  release_date: string
   track_count: number
   cover_url: string
 }
@@ -71,6 +73,9 @@ export type ScanStatus = {
   processed: number
   errors: number
   started_at: string
+  phase: string
+  lyrics_scraped: number
+  albums_scraped: number
 }
 
 export type PlayerTrack = {
@@ -102,6 +107,13 @@ export type ScrapeResponse = {
   status: string
   source?: string
   message?: string
+}
+
+export type AlbumScrapeResponse = {
+  album_id: string
+  status: string
+  mbid?: string
+  has_cover: boolean
 }
 
 export class ApiError extends Error {
@@ -199,6 +211,12 @@ export class ApiClient {
 
   scrapeTrack(trackId: string) {
     return this.request<ScrapeResponse>(`/api/v1/tracks/${encodeURIComponent(trackId)}/scrape`, {
+      method: 'POST',
+    })
+  }
+
+  scrapeAlbum(albumId: string) {
+    return this.request<AlbumScrapeResponse>(`/api/v1/albums/${encodeURIComponent(albumId)}/scrape`, {
       method: 'POST',
     })
   }
