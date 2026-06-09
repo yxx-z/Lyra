@@ -5,8 +5,31 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
+
+func TestMBSearch_QueryUnquotedAndEscaped(t *testing.T) {
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.Query().Get("query")
+		w.Write([]byte(`{"releases":[]}`))
+	}))
+	defer srv.Close()
+
+	// 标题含冒号：验证不再用短语引号、且 Lucene 保留字被转义
+	_, _ = newTestMB(srv).Search(context.Background(), AlbumQuery{AlbumTitle: "金片子: 贰", ArtistName: "蔡琴", TrackCount: 12})
+
+	if strings.Contains(gotQuery, `"`) {
+		t.Errorf("查询不应含短语引号: %q", gotQuery)
+	}
+	if !strings.Contains(gotQuery, `artist:蔡琴`) {
+		t.Errorf("应为裸词 artist:蔡琴, 得到 %q", gotQuery)
+	}
+	if !strings.Contains(gotQuery, `release:金片子\: 贰`) {
+		t.Errorf("标题中的冒号应被转义为 \\: , 得到 %q", gotQuery)
+	}
+}
 
 func TestPickRelease_ClosestTrackCount(t *testing.T) {
 	rs := []mbRelease{

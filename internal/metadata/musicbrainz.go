@@ -104,8 +104,10 @@ func NewMusicBrainzClient(baseURL, userAgent string, httpClient *http.Client) *M
 
 // Search 按艺术家+专辑查询，返回择优后的 release；无匹配返回 ErrNotFound。
 func (c *MusicBrainzClient) Search(ctx context.Context, q AlbumQuery) (ReleaseMatch, error) {
-	lucene := fmt.Sprintf(`artist:"%s" AND release:"%s"`,
-		sanitizeLucene(q.ArtistName), sanitizeLucene(q.AlbumTitle))
+	// 不用 release:"..." 精确短语：简体/繁体、标点（如「贰・」vs「貳·」）差异会让短语 0 命中。
+	// 改用裸词，让 MB 按分词打分（简繁差异下正确专辑仍能 score 100）；score≥90 + 曲目数兜底防误配。
+	lucene := fmt.Sprintf(`artist:%s AND release:%s`,
+		escapeLucene(q.ArtistName), escapeLucene(q.AlbumTitle))
 	endpoint := c.baseURL + "/ws/2/release/?query=" + url.QueryEscape(lucene) + "&fmt=json&limit=25"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
@@ -138,7 +140,15 @@ func (c *MusicBrainzClient) Search(ctx context.Context, q AlbumQuery) (ReleaseMa
 	return ReleaseMatch{MBID: r.ID, Title: r.Title, ReleaseDate: r.Date}, nil
 }
 
-// sanitizeLucene 去除可能破坏 Lucene 查询的双引号。
-func sanitizeLucene(s string) string {
-	return strings.ReplaceAll(s, `"`, "")
+// escapeLucene 转义 Lucene 保留字符，避免标题/艺术家中的特殊符号破坏裸词查询。
+func escapeLucene(s string) string {
+	const special = `+-!(){}[]^"~*?:\/`
+	var b strings.Builder
+	for _, r := range s {
+		if r < 128 && strings.ContainsRune(special, r) {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
