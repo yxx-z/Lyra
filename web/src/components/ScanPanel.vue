@@ -80,6 +80,10 @@
         <dd style="color: var(--accent);">{{ status.fingerprinted }}</dd>
       </div>
       <div class="scan-stats-card">
+        <dt>已升级同步</dt>
+        <dd style="color: var(--accent);">{{ status.lyrics_upgraded }}</dd>
+      </div>
+      <div class="scan-stats-card">
         <dt>扫描启动时间</dt>
         <dd style="font-size: 15px; font-weight: 600; padding: 6px 0; word-break: break-all;">
           {{ startedAt }}
@@ -122,6 +126,8 @@ const phaseLabel = computed(() => {
       return '刮削专辑元数据中'
     case 'fingerprint':
       return '指纹识别中'
+    case 'lyrics_sync':
+      return '升级同步歌词中'
     default:
       return '空闲'
   }

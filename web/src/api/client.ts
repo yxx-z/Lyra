@@ -77,6 +77,7 @@ export type ScanStatus = {
   lyrics_scraped: number
   albums_scraped: number
   fingerprinted: number
+  lyrics_upgraded: number
 }
 
 export type PlayerTrack = {

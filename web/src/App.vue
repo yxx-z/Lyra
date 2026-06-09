@@ -165,6 +165,7 @@ const scanStatus = reactive<ScanStatus>({
   lyrics_scraped: 0,
   albums_scraped: 0,
   fingerprinted: 0,
+  lyrics_upgraded: 0,
 })
 const scanTriggering = ref(false)
 let scanPollTimer: ReturnType<typeof setInterval> | null = null
