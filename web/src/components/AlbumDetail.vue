@@ -144,6 +144,7 @@ async function handleScrape() {
     if (res.status === 'done') {
       emit('refresh')
       coverVersion.value++
+      coverBroken.value = false
       scrapeMessage.value = '已更新'
     } else {
       scrapeMessage.value = '未匹配到专辑'
