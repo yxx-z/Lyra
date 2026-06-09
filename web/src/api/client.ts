@@ -76,6 +76,7 @@ export type ScanStatus = {
   phase: string
   lyrics_scraped: number
   albums_scraped: number
+  fingerprinted: number
 }
 
 export type PlayerTrack = {
