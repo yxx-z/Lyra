@@ -163,3 +163,41 @@ func TestPickByVote_Empty(t *testing.T) {
 		t.Error("全空应 false")
 	}
 }
+
+func TestRecordingReleases(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"releases":[{"id":"rel-1"},{"id":"rel-2"}]}`))
+	}))
+	defer srv.Close()
+	ids, err := newTestMB(srv).RecordingReleases(context.Background(), "rec-1")
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(ids) != 2 || ids[0] != "rel-1" || ids[1] != "rel-2" {
+		t.Errorf("ids = %v", ids)
+	}
+}
+
+func TestRecordingReleases_HTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	if _, err := newTestMB(srv).RecordingReleases(context.Background(), "rec-1"); err == nil {
+		t.Error("500 应返回 error")
+	}
+}
+
+func TestReleaseDate(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"id":"rel-1","date":"2003-07-31"}`))
+	}))
+	defer srv.Close()
+	d, err := newTestMB(srv).ReleaseDate(context.Background(), "rel-1")
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if d != "2003-07-31" {
+		t.Errorf("date = %q", d)
+	}
+}

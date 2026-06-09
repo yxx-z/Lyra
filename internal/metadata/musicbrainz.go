@@ -208,3 +208,41 @@ func pickByVote(releasesPerTrack [][]string) (string, bool) {
 	}
 	return best, true
 }
+
+// RecordingReleases 返回某 recording 所属的所有 release MBID。
+func (c *MusicBrainzClient) RecordingReleases(ctx context.Context, recordingMBID string) ([]string, error) {
+	endpoint := c.baseURL + "/ws/2/recording/" + url.PathEscape(recordingMBID) + "?inc=releases&fmt=json"
+	body, err := c.doGet(ctx, endpoint)
+	if err != nil {
+		return nil, err
+	}
+	var payload struct {
+		Releases []struct {
+			ID string `json:"id"`
+		} `json:"releases"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("musicbrainz recording 解码失败: %w", err)
+	}
+	ids := make([]string, 0, len(payload.Releases))
+	for _, r := range payload.Releases {
+		ids = append(ids, r.ID)
+	}
+	return ids, nil
+}
+
+// ReleaseDate 返回某 release 的发行日期（date 字段，可能空）。
+func (c *MusicBrainzClient) ReleaseDate(ctx context.Context, releaseMBID string) (string, error) {
+	endpoint := c.baseURL + "/ws/2/release/" + url.PathEscape(releaseMBID) + "?fmt=json"
+	body, err := c.doGet(ctx, endpoint)
+	if err != nil {
+		return "", err
+	}
+	var payload struct {
+		Date string `json:"date"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", fmt.Errorf("musicbrainz release 解码失败: %w", err)
+	}
+	return payload.Date, nil
+}
