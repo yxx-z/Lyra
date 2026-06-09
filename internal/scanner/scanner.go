@@ -227,13 +227,13 @@ func (s *Scanner) doScan() {
 		s.phase.Store("scraping")
 		s.scrapePending(ctx)
 	}
-	if s.scrapeEnabled && s.services.Metadata != nil {
-		s.phase.Store("metadata")
-		s.scrapeAlbumsPending(ctx)
-	}
 	if s.scrapeEnabled && s.services.Fingerprint != nil {
 		s.phase.Store("fingerprint")
 		s.fingerprintPending(ctx)
+	}
+	if s.scrapeEnabled && s.services.Metadata != nil {
+		s.phase.Store("metadata")
+		s.scrapeAlbumsPending(ctx)
 	}
 	s.phase.Store("idle")
 }
