@@ -38,6 +38,11 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	h.reg(r, "getLicense", h.getLicense)
 	h.reg(r, "getMusicFolders", h.getMusicFolders)
 	// Task 4: getArtists/getArtist/getAlbum/getAlbumList2/getSong
+	h.reg(r, "getArtists", h.getArtists)
+	h.reg(r, "getArtist", h.getArtist)
+	h.reg(r, "getAlbum", h.getAlbum)
+	h.reg(r, "getAlbumList2", h.getAlbumList2)
+	h.reg(r, "getSong", h.getSong)
 	// Task 5: search3
 	// Task 6: getCoverArt/stream/scrobble
 }
