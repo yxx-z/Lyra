@@ -244,3 +244,33 @@ func TestFingerprintPending_CountsIdentified(t *testing.T) {
 		t.Errorf("acoustid 落库 = %q", aid)
 	}
 }
+
+func TestUpgradeLyricsPending_CountsUpgraded(t *testing.T) {
+	d, err := db.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if _, err := d.Exec(`INSERT INTO artists(id,name) VALUES('a1','A')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(`INSERT INTO tracks(id,title,artist_id,file_path,format,duration,is_available,scrape_status) VALUES('t1','歌','a1','/tmp/x.mp3','mp3',200,1,'done')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(`INSERT INTO lyrics(track_id,lrc_content,source,sync_checked) VALUES('t1','纯文本','embedded',0)`); err != nil {
+		t.Fatal(err)
+	}
+	svc := lyrics.NewLyricsService(d, scanStubProvider{res: lyrics.Result{LRCContent: "[00:01.00]同步", Source: "lrclib"}})
+	s := NewScanner(d, config.LibraryConfig{}, "", ScrapeServices{Lyrics: svc}, true)
+
+	s.upgradeLyricsPending(context.Background())
+
+	if got := s.Status().LyricsUpgraded; got != 1 {
+		t.Errorf("LyricsUpgraded = %d, want 1", got)
+	}
+	var lrc string
+	d.QueryRow(`SELECT lrc_content FROM lyrics WHERE track_id='t1'`).Scan(&lrc)
+	if lrc != "[00:01.00]同步" {
+		t.Errorf("应升级为同步，得到 %q", lrc)
+	}
+}

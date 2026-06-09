@@ -35,8 +35,9 @@ type ScanStatus struct {
 	StartedAt     time.Time `json:"started_at"`
 	Phase         string    `json:"phase"`
 	LyricsScraped int64     `json:"lyrics_scraped"`
-	AlbumsScraped int64     `json:"albums_scraped"`
-	Fingerprinted int64     `json:"fingerprinted"`
+	AlbumsScraped  int64     `json:"albums_scraped"`
+	Fingerprinted  int64     `json:"fingerprinted"`
+	LyricsUpgraded int64     `json:"lyrics_upgraded"`
 }
 
 // Scanner orchestrates directory walking, tag reading, and DB ingestion.
@@ -54,9 +55,10 @@ type Scanner struct {
 	processed atomic.Int64
 	errors    atomic.Int64
 
-	lyricsScraped atomic.Int64
-	albumsScraped atomic.Int64
-	fingerprinted atomic.Int64
+	lyricsScraped  atomic.Int64
+	albumsScraped  atomic.Int64
+	fingerprinted  atomic.Int64
+	lyricsUpgraded atomic.Int64
 	phase         atomic.Value // string
 
 	mu             sync.RWMutex
@@ -141,9 +143,10 @@ func (s *Scanner) Status() ScanStatus {
 		Errors:        s.errors.Load(),
 		StartedAt:     startedAt,
 		Phase:         phase,
-		LyricsScraped: s.lyricsScraped.Load(),
-		AlbumsScraped: s.albumsScraped.Load(),
-		Fingerprinted: s.fingerprinted.Load(),
+		LyricsScraped:  s.lyricsScraped.Load(),
+		AlbumsScraped:  s.albumsScraped.Load(),
+		Fingerprinted:  s.fingerprinted.Load(),
+		LyricsUpgraded: s.lyricsUpgraded.Load(),
 	}
 }
 
@@ -164,6 +167,7 @@ func (s *Scanner) doScan() {
 	s.lyricsScraped.Store(0)
 	s.albumsScraped.Store(0)
 	s.fingerprinted.Store(0)
+	s.lyricsUpgraded.Store(0)
 	s.phase.Store("scanning")
 	s.mu.Lock()
 	s.startedAt = time.Now()
@@ -226,6 +230,10 @@ func (s *Scanner) doScan() {
 	if s.scrapeEnabled && s.services.Lyrics != nil {
 		s.phase.Store("scraping")
 		s.scrapePending(ctx)
+	}
+	if s.scrapeEnabled && s.services.Lyrics != nil {
+		s.phase.Store("lyrics_sync")
+		s.upgradeLyricsPending(ctx)
 	}
 	if s.scrapeEnabled && s.services.Fingerprint != nil {
 		s.phase.Store("fingerprint")
@@ -332,6 +340,15 @@ func (s *Scanner) scrapeAlbumsPending(ctx context.Context) {
 		}
 	}
 	slog.Info("后台专辑元数据刮削结束", "成功", s.albumsScraped.Load())
+}
+
+func (s *Scanner) upgradeLyricsPending(ctx context.Context) {
+	n, err := s.services.Lyrics.UpgradeStaleLyrics(ctx)
+	if err != nil {
+		s.errors.Add(1)
+		return
+	}
+	s.lyricsUpgraded.Store(int64(n))
 }
 
 func (s *Scanner) fingerprintPending(ctx context.Context) {
