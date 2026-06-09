@@ -100,13 +100,14 @@ type SearchResult3 struct {
 
 // writeResponse 按 f 参数输出 XML 或 JSON 的 subsonic-response 封套。
 func writeResponse(w http.ResponseWriter, r *http.Request, resp *Response) {
+	_ = r.ParseForm()
 	if resp.Status == "" {
 		resp.Status = "ok"
 	}
 	resp.Version = subsonicAPIVersion
 	resp.Xmlns = subsonicXmlns
 
-	switch r.URL.Query().Get("f") {
+	switch r.Form.Get("f") {
 	case "json", "jsonp":
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		body, err := json.Marshal(map[string]*Response{"subsonic-response": resp})
@@ -114,7 +115,7 @@ func writeResponse(w http.ResponseWriter, r *http.Request, resp *Response) {
 			slog.Error("subsonic JSON 编码失败", "err", err)
 			return
 		}
-		if cb := r.URL.Query().Get("callback"); r.URL.Query().Get("f") == "jsonp" && cb != "" {
+		if cb := r.Form.Get("callback"); r.Form.Get("f") == "jsonp" && cb != "" {
 			_, _ = w.Write([]byte(cb + "("))
 			_, _ = w.Write(body)
 			_, _ = w.Write([]byte(");"))

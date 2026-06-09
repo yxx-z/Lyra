@@ -55,6 +55,16 @@ func TestWriteError(t *testing.T) {
 	}
 }
 
+func TestWriteResponse_JSONFromPOSTBody(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/rest/ping", strings.NewReader("f=json"))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	writeResponse(w, r, &Response{})
+	if ct := w.Header().Get("Content-Type"); !strings.Contains(ct, "json") {
+		t.Errorf("POST body f=json 应得 JSON，Content-Type=%q body=%s", ct, w.Body.String())
+	}
+}
+
 func TestResponse_AlbumListXMLArray(t *testing.T) {
 	resp := &Response{AlbumList2: &AlbumList2{Album: []AlbumID3{{ID: "a1", Name: "X"}, {ID: "a2", Name: "Y"}}}}
 	out, _ := xml.Marshal(resp)
