@@ -138,3 +138,28 @@ func TestMB_Throttle(t *testing.T) {
 		t.Errorf("两次请求应间隔≥80ms（节流），实际 %v", elapsed)
 	}
 }
+
+func TestPickByVote_MaxCoverage(t *testing.T) {
+	in := [][]string{{"relA", "relB"}, {"relA", "relC"}, {"relA"}}
+	got, ok := pickByVote(in)
+	if !ok || got != "relA" {
+		t.Fatalf("应选覆盖最多的 relA，得到 %q ok=%v", got, ok)
+	}
+}
+
+func TestPickByVote_TieFirstSeen(t *testing.T) {
+	in := [][]string{{"relX"}, {"relY"}} // 各 1 票，relX 先出现
+	got, ok := pickByVote(in)
+	if !ok || got != "relX" {
+		t.Fatalf("并列应取先出现的 relX，得到 %q", got)
+	}
+}
+
+func TestPickByVote_Empty(t *testing.T) {
+	if _, ok := pickByVote(nil); ok {
+		t.Error("空应 false")
+	}
+	if _, ok := pickByVote([][]string{{}}); ok {
+		t.Error("全空应 false")
+	}
+}

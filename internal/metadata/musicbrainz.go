@@ -182,3 +182,29 @@ func escapeLucene(s string) string {
 	}
 	return b.String()
 }
+
+// pickByVote 统计各 release 被多少首曲目覆盖，返回覆盖最多者；并列取先出现者；无 → false。
+func pickByVote(releasesPerTrack [][]string) (string, bool) {
+	counts := map[string]int{}
+	order := make([]string, 0)
+	for _, rels := range releasesPerTrack {
+		for _, id := range rels {
+			if counts[id] == 0 {
+				order = append(order, id)
+			}
+			counts[id]++
+		}
+	}
+	best := ""
+	bestN := 0
+	for _, id := range order {
+		if counts[id] > bestN {
+			bestN = counts[id]
+			best = id
+		}
+	}
+	if best == "" {
+		return "", false
+	}
+	return best, true
+}
