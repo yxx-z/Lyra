@@ -44,6 +44,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	h.reg(r, "getAlbumList2", h.getAlbumList2)
 	h.reg(r, "getSong", h.getSong)
 	// Task 5: search3
+	h.reg(r, "search3", h.search3)
 	// Task 6: getCoverArt/stream/scrobble
 }
 
