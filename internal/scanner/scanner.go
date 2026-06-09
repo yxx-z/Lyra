@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/yxx-z/lyra/internal/acoustid"
 	"github.com/yxx-z/lyra/internal/config"
 	"github.com/yxx-z/lyra/internal/lyrics"
 	"github.com/yxx-z/lyra/internal/metadata"
@@ -17,6 +18,13 @@ import (
 
 // ErrScanInProgress is returned by TriggerScan when a scan is already running.
 var ErrScanInProgress = errors.New("扫描正在进行中")
+
+// ScrapeServices 聚合后台刮削/识别服务，任一可为 nil。
+type ScrapeServices struct {
+	Lyrics      *lyrics.LyricsService
+	Metadata    *metadata.MetadataService
+	Fingerprint *acoustid.FingerprintService
+}
 
 // ScanStatus is a point-in-time snapshot of scanner progress.
 type ScanStatus struct {
@@ -37,9 +45,8 @@ type Scanner struct {
 	ing         *Ingester
 	ffprobePath string
 
-	lyricsService   *lyrics.LyricsService
-	metadataService *metadata.MetadataService
-	scrapeEnabled   bool
+	services      ScrapeServices
+	scrapeEnabled bool
 
 	running   atomic.Bool
 	total     atomic.Int64
@@ -60,16 +67,15 @@ type Scanner struct {
 }
 
 // NewScanner creates a Scanner. Call Start to begin scanning.
-func NewScanner(db *sql.DB, cfg config.LibraryConfig, ffprobePath string, lyricsService *lyrics.LyricsService, metadataService *metadata.MetadataService, scrapeEnabled bool) *Scanner {
+func NewScanner(db *sql.DB, cfg config.LibraryConfig, ffprobePath string, services ScrapeServices, scrapeEnabled bool) *Scanner {
 	s := &Scanner{
-		db:              db,
-		cfg:             cfg,
-		ing:             NewIngester(db),
-		ffprobePath:     ffprobePath,
-		lyricsService:   lyricsService,
-		metadataService: metadataService,
-		scrapeEnabled:   scrapeEnabled,
-		stopCh:          make(chan struct{}),
+		db:            db,
+		cfg:           cfg,
+		ing:           NewIngester(db),
+		ffprobePath:   ffprobePath,
+		services:      services,
+		scrapeEnabled: scrapeEnabled,
+		stopCh:        make(chan struct{}),
 	}
 	s.phase.Store("idle")
 	return s
@@ -213,11 +219,11 @@ func (s *Scanner) doScan() {
 	}
 
 	// 刮削阶段：为缺歌词的曲目串行刮削（受 scraper.enabled 控制，可被 ctx 中断）
-	if s.scrapeEnabled && s.lyricsService != nil {
+	if s.scrapeEnabled && s.services.Lyrics != nil {
 		s.phase.Store("scraping")
 		s.scrapePending(ctx)
 	}
-	if s.scrapeEnabled && s.metadataService != nil {
+	if s.scrapeEnabled && s.services.Metadata != nil {
 		s.phase.Store("metadata")
 		s.scrapeAlbumsPending(ctx)
 	}
@@ -254,7 +260,7 @@ func (s *Scanner) scrapePending(ctx context.Context) {
 			return
 		default:
 		}
-		outcome, err := s.lyricsService.ScrapeTrack(ctx, id)
+		outcome, err := s.services.Lyrics.ScrapeTrack(ctx, id)
 		if err != nil || outcome.Status == "failed" {
 			s.errors.Add(1)
 		} else if outcome.Status == "done" {
@@ -302,7 +308,7 @@ func (s *Scanner) scrapeAlbumsPending(ctx context.Context) {
 			return
 		default:
 		}
-		outcome, err := s.metadataService.EnrichAlbum(ctx, id)
+		outcome, err := s.services.Metadata.EnrichAlbum(ctx, id)
 		// EnrichAlbum 透传 MB 瞬时错误（网络/5xx）时不改 scrape_status，
 		// 专辑保持 'pending'，下次扫描自动重试；仅 "failed"（无匹配）会被持久化。
 		if err != nil || outcome.Status == "failed" {

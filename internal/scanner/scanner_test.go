@@ -25,7 +25,7 @@ func newTestScanner(t *testing.T, paths []string) *Scanner {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	return NewScanner(d, config.LibraryConfig{Paths: paths}, "", nil, nil, false)
+	return NewScanner(d, config.LibraryConfig{Paths: paths}, "", ScrapeServices{}, false)
 }
 
 func TestNewScanner_NotRunning(t *testing.T) {
@@ -108,7 +108,7 @@ func TestDoScan_ScrapePhase_MarksDone(t *testing.T) {
 	t.Cleanup(func() { d.Close() })
 
 	svc := lyrics.NewLyricsService(d, scanStubProvider{res: lyrics.Result{LRCContent: "[00:01.00]hi", Source: "lrclib"}})
-	s := NewScanner(d, config.LibraryConfig{Paths: []string{dir}}, "", svc, nil, true)
+	s := NewScanner(d, config.LibraryConfig{Paths: []string{dir}}, "", ScrapeServices{Lyrics: svc}, true)
 	defer s.Stop()
 
 	s.TriggerScan()
@@ -148,7 +148,7 @@ func TestScanStatus_HasAlbumsScraped(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	s := NewScanner(d, config.LibraryConfig{}, "", nil, nil, false)
+	s := NewScanner(d, config.LibraryConfig{}, "", ScrapeServices{}, false)
 	st := s.Status()
 	if st.AlbumsScraped != 0 {
 		t.Errorf("初始 AlbumsScraped 应为 0，得到 %d", st.AlbumsScraped)
@@ -194,7 +194,7 @@ func TestScrapeAlbumsPending_CountsDoneAlbums(t *testing.T) {
 	)
 
 	// 直接构造 scanner，不需要文件系统路径
-	s := NewScanner(d, config.LibraryConfig{}, "", nil, metaSvc, true)
+	s := NewScanner(d, config.LibraryConfig{}, "", ScrapeServices{Metadata: metaSvc}, true)
 
 	// 直接调用元数据阶段（同包可访问未导出方法），跳过文件扫描
 	s.scrapeAlbumsPending(context.Background())

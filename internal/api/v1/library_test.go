@@ -19,7 +19,7 @@ func newTestHandler(t *testing.T) *LibraryHandler {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	s := scanner.NewScanner(d, config.LibraryConfig{}, "", nil, nil, false)
+	s := scanner.NewScanner(d, config.LibraryConfig{}, "", scanner.ScrapeServices{}, false)
 	return NewLibraryHandler(s)
 }
 

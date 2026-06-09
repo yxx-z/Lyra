@@ -20,7 +20,7 @@ func TestRouterTrackScrapeRouteRequiresAuth(t *testing.T) {
 
 	cfg := config.Default()
 	cfg.Auth.Token = "test-token"
-	s := scanner.NewScanner(d, config.LibraryConfig{}, "", nil, nil, false)
+	s := scanner.NewScanner(d, config.LibraryConfig{}, "", scanner.ScrapeServices{}, false)
 	router := NewRouter(s, d, cfg)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tracks/t1/scrape", strings.NewReader(""))

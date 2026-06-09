@@ -24,7 +24,7 @@ func newTestRouterWithAuth(t *testing.T, auth config.AuthConfig) http.Handler {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	s := scanner.NewScanner(d, config.LibraryConfig{}, "", nil, nil, false)
+	s := scanner.NewScanner(d, config.LibraryConfig{}, "", scanner.ScrapeServices{}, false)
 	cfg := &config.Config{Auth: auth}
 	return NewRouter(s, d, cfg)
 }
