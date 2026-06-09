@@ -84,6 +84,9 @@ func (s *MetadataService) resolveByFingerprint(ctx context.Context, albumID stri
 		}
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return ReleaseMatch{}, false
+	}
 	if len(recMBIDs) == 0 {
 		return ReleaseMatch{}, false
 	}
