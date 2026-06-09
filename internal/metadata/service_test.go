@@ -193,3 +193,38 @@ func TestEnrichAlbum_MBError(t *testing.T) {
 		t.Error("MB 异常时状态不应为 done")
 	}
 }
+
+func TestEnrichAlbum_FingerprintAllFailFallback(t *testing.T) {
+	database, id := setupAlbum(t, 2) // 专辑 al1 + 曲目 tra/trb
+	if _, err := database.Exec(`UPDATE tracks SET mbid='rec-a' WHERE id='tra'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`UPDATE tracks SET mbid='rec-b' WHERE id='trb'`); err != nil {
+		t.Fatal(err)
+	}
+
+	mb := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/ws/2/recording/"):
+			http.Error(w, "boom", http.StatusInternalServerError) // 指纹查询全失败
+		default:
+			// 文本搜索 /ws/2/release/?query=... → 返回一个 score100、曲目数匹配的 release
+			w.Write([]byte(`{"releases":[{"id":"rel-text","score":100,"title":"叶惠美","track-count":2}]}`))
+		}
+	}))
+	defer mb.Close()
+	caa := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer caa.Close()
+	svc := newSvc(t, database, mb.URL, caa.URL, t.TempDir())
+	svc.mb.minInterval = 0 // 消除节流延迟，加速测试
+
+	out, err := svc.EnrichAlbum(context.Background(), id)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if out.Status != "done" || out.MBID != "rel-text" {
+		t.Fatalf("指纹全失败应退回文本搜索选 rel-text，得到 %+v", out)
+	}
+}

@@ -110,6 +110,7 @@ func NewMusicBrainzClient(baseURL, userAgent string, httpClient *http.Client) *M
 
 // throttle 保证任意两次 MB 请求间隔 ≥ minInterval（全局 1 req/s 限速合规）。
 func (c *MusicBrainzClient) throttle(ctx context.Context) error {
+	// 持锁期间 sleep：故意串行化所有调用者，确保全局 1 req/s（并发调用会排队，符合限速预期）。
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if d := c.minInterval - time.Since(c.lastReqAt); d > 0 {
