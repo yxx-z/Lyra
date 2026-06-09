@@ -216,6 +216,12 @@ export class ApiClient {
     })
   }
 
+  upgradeLyrics(trackId: string) {
+    return this.request<ScrapeResponse>(`/api/v1/tracks/${encodeURIComponent(trackId)}/lyrics/upgrade`, {
+      method: 'POST',
+    })
+  }
+
   scrapeAlbum(albumId: string) {
     return this.request<AlbumScrapeResponse>(`/api/v1/albums/${encodeURIComponent(albumId)}/scrape`, {
       method: 'POST',

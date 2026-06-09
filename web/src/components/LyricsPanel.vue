@@ -74,6 +74,19 @@
 
         <!-- C. 标准滚动歌词面板 -->
         <div v-else ref="scrollerRef" class="lyrics-scroller">
+          <div v-if="!synced" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0 16px;">
+            <button
+              class="custom-btn-primary"
+              style="width: auto; padding: 8px 18px; font-size: 13px; display: inline-flex; align-items: center; gap: 8px;"
+              type="button"
+              :disabled="upgrading"
+              @click="handleUpgrade"
+            >
+              <span v-if="upgrading" class="loading-spinner" aria-label="升级中"></span>
+              <span>{{ upgrading ? '升级中…' : '⏱ 升级为同步歌词' }}</span>
+            </button>
+            <span v-if="upgradeMessage" class="muted" style="font-size: 12px;">{{ upgradeMessage }}</span>
+          </div>
           <button
             v-for="(line, idx) in lrcLines"
             :key="idx"
@@ -118,6 +131,8 @@ const error = ref<string | null>(null)
 const currentLineIndex = ref(-1)
 const scraping = ref(false)
 const scrapeMessage = ref('')
+const upgrading = ref(false)
+const upgradeMessage = ref('')
 // 是否带时间轴（可滚动同步 + 点击跳转）；纯文本歌词为 false，静态展示
 const synced = ref(false)
 
@@ -177,6 +192,7 @@ async function loadLyrics() {
   lrcLines.value = []
   coverBroken.value = false
   scrapeMessage.value = ''
+  upgradeMessage.value = ''
 
   try {
     const res = await props.api.getLyrics(track.trackId)
@@ -221,6 +237,31 @@ async function handleScrape() {
     }
   } finally {
     scraping.value = false
+  }
+}
+
+// 纯文本歌词升级为同步歌词
+async function handleUpgrade() {
+  const track = playerStore.currentTrack
+  if (!track || upgrading.value) return
+  upgrading.value = true
+  upgradeMessage.value = ''
+  try {
+    const res = await props.api.upgradeLyrics(track.trackId)
+    if (res.status === 'upgraded') {
+      await loadLyrics()
+      upgradeMessage.value = '已升级为同步歌词'
+    } else {
+      upgradeMessage.value = '未找到同步版本'
+    }
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      upgradeMessage.value = '未找到同步版本'
+    } else {
+      upgradeMessage.value = '升级失败，请重试'
+    }
+  } finally {
+    upgrading.value = false
   }
 }
 
