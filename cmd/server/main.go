@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/yxx-z/lyra/internal/acoustid"
 	"github.com/yxx-z/lyra/internal/api"
 	"github.com/yxx-z/lyra/internal/config"
 	"github.com/yxx-z/lyra/internal/db"
@@ -77,7 +78,19 @@ func main() {
 		metadata.NewCoverArtClient("https://coverartarchive.org", nil),
 		cfg.Cache.ArtworkDir,
 	)
-	sc := scanner.NewScanner(database, cfg.Library, cfg.Transcode.FfprobePath, lyricsService, metadataService, cfg.Scraper.Enabled)
+	var fingerprintService *acoustid.FingerprintService
+	if cfg.Scraper.AcoustID.APIKey != "" {
+		fingerprintService = acoustid.NewFingerprintService(
+			database,
+			acoustid.NewExecFingerprinter(cfg.Scraper.AcoustID.FpcalcPath),
+			acoustid.NewAcoustIDClient("https://api.acoustid.org", cfg.Scraper.AcoustID.APIKey, nil),
+		)
+	}
+	sc := scanner.NewScanner(database, cfg.Library, cfg.Transcode.FfprobePath, scanner.ScrapeServices{
+		Lyrics:      lyricsService,
+		Metadata:    metadataService,
+		Fingerprint: fingerprintService,
+	}, cfg.Scraper.Enabled)
 	if err := sc.Start(); err != nil {
 		slog.Error("启动扫描器失败", "err", err)
 		os.Exit(1)
