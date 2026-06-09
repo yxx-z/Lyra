@@ -67,7 +67,7 @@ func TestUpgradeToSynced_NoSyncedKeepsExisting(t *testing.T) {
 
 func TestUpgradeToSynced_YRCCountsSynced(t *testing.T) {
 	d := newServiceTestDB(t)
-	lrc := &fakeProvider{name: "lrclib", result: Result{YRCContent: `{"lines":[{"start":1}]}`, Source: "netease"}}
+	lrc := &fakeProvider{name: "lrclib", result: Result{YRCContent: `{"lines":[{"start":1}]}`, Source: "lrclib"}}
 	svc := NewLyricsService(d, lrc)
 
 	out, err := svc.UpgradeToSynced(context.Background(), "t1")

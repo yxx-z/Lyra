@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-var lrcTimestampRe = regexp.MustCompile(`\[\d+:\d+`)
+var lrcTimestampRe = regexp.MustCompile(`\[\d+:\d+(\.\d+)?\]`)
 
 // hasTimestamps 判断 LRC 文本是否含 [mm:ss] 时间轴（即同步歌词）。
 func hasTimestamps(lrc string) bool {
