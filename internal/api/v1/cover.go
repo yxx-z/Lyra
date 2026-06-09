@@ -24,10 +24,11 @@ func NewCoverHandler(db *sql.DB) *CoverHandler {
 
 // GetCover handles GET /api/v1/cover/:id where id is an album ID.
 func (h *CoverHandler) GetCover(w http.ResponseWriter, r *http.Request) {
-	h.getCover(w, r, chi.URLParam(r, "id"))
+	h.ServeCover(w, r, chi.URLParam(r, "id"))
 }
 
-func (h *CoverHandler) getCover(w http.ResponseWriter, r *http.Request, albumID string) {
+// ServeCover 按 albumID 输出封面（内嵌→本地→cover_path）。
+func (h *CoverHandler) ServeCover(w http.ResponseWriter, r *http.Request, albumID string) {
 	var filePath string
 	err := h.db.QueryRow(
 		`SELECT file_path FROM tracks WHERE album_id=? AND is_available=1 LIMIT 1`,

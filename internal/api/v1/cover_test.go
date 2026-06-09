@@ -33,7 +33,7 @@ func TestGetCover_CoverJpg(t *testing.T) {
 	h := NewCoverHandler(d)
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/cover/al1", nil)
-	h.getCover(w, req, "al1")
+	h.ServeCover(w, req, "al1")
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("want 200, got %d", w.Code)
@@ -48,7 +48,7 @@ func TestGetCover_NotFound(t *testing.T) {
 	h := NewCoverHandler(d)
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/cover/noalbum", nil)
-	h.getCover(w, req, "noalbum")
+	h.ServeCover(w, req, "noalbum")
 	if w.Code != http.StatusNotFound {
 		t.Errorf("want 404, got %d", w.Code)
 	}
@@ -79,7 +79,7 @@ func TestGetCover_CoverPathFallback(t *testing.T) {
 	h := NewCoverHandler(d)
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/cover/al", nil)
-	h.getCover(w, req, "al")
+	h.ServeCover(w, req, "al")
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("应 200，得到 %d", w.Code)

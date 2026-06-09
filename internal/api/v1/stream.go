@@ -50,10 +50,11 @@ func NewStreamHandler(db *sql.DB, transcode config.TranscodeConfig, cacheDir str
 
 // Stream handles GET /api/v1/tracks/:id/stream.
 func (h *StreamHandler) Stream(w http.ResponseWriter, r *http.Request) {
-	h.stream(w, r, chi.URLParam(r, "id"))
+	h.StreamByID(w, r, chi.URLParam(r, "id"))
 }
 
-func (h *StreamHandler) stream(w http.ResponseWriter, r *http.Request, trackID string) {
+// StreamByID 按 trackID 输出音频（直传或转码）。
+func (h *StreamHandler) StreamByID(w http.ResponseWriter, r *http.Request, trackID string) {
 	var filePath, format string
 	err := h.db.QueryRow(
 		`SELECT file_path, format FROM tracks WHERE id=? AND is_available=1`,

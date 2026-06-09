@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/yxx-z/lyra/internal/api/middleware"
+	"github.com/yxx-z/lyra/internal/api/subsonic"
 	v1 "github.com/yxx-z/lyra/internal/api/v1"
 	"github.com/yxx-z/lyra/internal/config"
 	lyricspkg "github.com/yxx-z/lyra/internal/lyrics"
@@ -82,6 +83,11 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 		search := v1.NewSearchHandler(db)
 		r.Get("/search", search.Search)
 	})
+
+	subStream := v1.NewStreamHandler(db, cfg.Transcode, cfg.Cache.TranscodeDir)
+	subCover := v1.NewCoverHandler(db)
+	subHandler := subsonic.NewHandler(db, cfg, subStream, subCover)
+	r.Route("/rest", subHandler.RegisterRoutes)
 
 	// 所有非 API 路由返回嵌入的前端文件
 	sub, err := fs.Sub(ui.Dist, "dist")

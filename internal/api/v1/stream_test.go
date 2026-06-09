@@ -35,7 +35,7 @@ func TestStream_ServesFile(t *testing.T) {
 	h := NewStreamHandler(d, config.TranscodeConfig{}, t.TempDir())
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/tracks/t1/stream", nil)
-	h.stream(w, req, "t1")
+	h.StreamByID(w, req, "t1")
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("want 200, got %d", w.Code)
@@ -76,7 +76,7 @@ func TestStream_TranscodesM4AToMP3(t *testing.T) {
 	}, t.TempDir())
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/tracks/t1/stream", nil)
-	h.stream(w, req, "t1")
+	h.StreamByID(w, req, "t1")
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("want 200, got %d", w.Code)
@@ -94,7 +94,7 @@ func TestStream_NotFound(t *testing.T) {
 	h := NewStreamHandler(d, config.TranscodeConfig{}, t.TempDir())
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/tracks/nope/stream", nil)
-	h.stream(w, req, "nope")
+	h.StreamByID(w, req, "nope")
 	if w.Code != http.StatusNotFound {
 		t.Errorf("want 404, got %d", w.Code)
 	}
@@ -131,7 +131,7 @@ func TestStream_TranscodeCacheHit(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/tracks/t1/stream", nil)
-		h.stream(w, req, "t1")
+		h.StreamByID(w, req, "t1")
 		if w.Code != http.StatusOK {
 			t.Fatalf("request %d: want 200, got %d", i, w.Code)
 		}
@@ -174,7 +174,7 @@ func TestStream_TranscodeIgnoresCanceledProbeRequest(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/tracks/t1/stream", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 
-	h.stream(w, req, "t1")
+	h.StreamByID(w, req, "t1")
 
 	cachePath := h.cache.Path("t1", "mp3", 192)
 	if _, err := os.Stat(cachePath); err != nil {
@@ -212,7 +212,7 @@ func TestStream_CachedTranscodeIgnoresBrowserCacheValidators(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/tracks/t1/stream", nil)
 	req.Header.Set("If-Modified-Since", time.Now().Add(time.Hour).UTC().Format(http.TimeFormat))
 	w := httptest.NewRecorder()
-	h.stream(w, req, "t1")
+	h.StreamByID(w, req, "t1")
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("want 200, got %d", w.Code)
