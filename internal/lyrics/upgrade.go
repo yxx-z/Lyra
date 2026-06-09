@@ -3,8 +3,10 @@ package lyrics
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var lrcTimestampRe = regexp.MustCompile(`\[\d+:\d+(\.\d+)?\]`)
@@ -58,4 +60,70 @@ func (s *LyricsService) UpgradeToSynced(ctx context.Context, trackID string) (Up
 		// 命中但仍是纯文本 → 试下一个
 	}
 	return UpgradeOutcome{Status: "no_synced"}, nil
+}
+
+// markSyncChecked 标记某曲目已做过自动同步升级检查。
+func (s *LyricsService) markSyncChecked(trackID string) {
+	if _, err := s.db.Exec(`UPDATE lyrics SET sync_checked=1 WHERE track_id=?`, trackID); err != nil {
+		slog.Warn("标记 sync_checked 失败", "track", trackID, "err", err)
+	}
+}
+
+// UpgradeStaleLyrics 批量把未检查的纯文本歌词升级为同步版，返回成功升级数。
+// 已同步的候选只标记不联网；无同步版也标记（避免反复查询）；瞬时错误不标记（下次重试）。
+func (s *LyricsService) UpgradeStaleLyrics(ctx context.Context) (int, error) {
+	rows, err := s.db.Query(`
+		SELECT track_id, COALESCE(lrc_content,'') FROM lyrics
+		WHERE sync_checked=0 AND COALESCE(yrc_content,'')='' AND TRIM(COALESCE(lrc_content,''))<>''`)
+	if err != nil {
+		return 0, err
+	}
+	type cand struct{ id, lrc string }
+	var cands []cand
+	for rows.Next() {
+		var c cand
+		if err := rows.Scan(&c.id, &c.lrc); err == nil {
+			cands = append(cands, c)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if len(cands) == 0 {
+		return 0, nil
+	}
+	slog.Info("开始后台同步歌词升级", "待检查", len(cands))
+
+	upgraded := 0
+	for _, c := range cands {
+		select {
+		case <-ctx.Done():
+			return upgraded, nil
+		default:
+		}
+		if hasTimestamps(c.lrc) {
+			// 已是同步歌词：只标记，不联网
+			s.markSyncChecked(c.id)
+			continue
+		}
+		out, err := s.UpgradeToSynced(ctx, c.id)
+		if err != nil {
+			// 瞬时错误（网络/provider 异常）：不标记，下次扫描重试
+			slog.Warn("同步歌词升级失败", "track", c.id, "err", err)
+			continue
+		}
+		s.markSyncChecked(c.id)
+		if out.Status == "upgraded" {
+			upgraded++
+		}
+		// 仅在真打了网络后节流（LRCLIB 限速礼貌）
+		select {
+		case <-time.After(800 * time.Millisecond):
+		case <-ctx.Done():
+			return upgraded, nil
+		}
+	}
+	slog.Info("后台同步歌词升级结束", "升级", upgraded)
+	return upgraded, nil
 }
