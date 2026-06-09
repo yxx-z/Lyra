@@ -62,7 +62,9 @@
         />
         <AlbumDetail
           :album="selectedAlbum"
+          :api="api"
           @play="playAlbumTrack"
+          @refresh="refreshSelectedAlbum"
         />
       </div>
 
@@ -253,6 +255,15 @@ async function selectAlbum(id: string) {
     selectedAlbum.value = await api.getAlbum(id)
     mode.value = 'albums'
     searchQuery.value = ''
+  } catch (error) {
+    handleApiError(error)
+  }
+}
+
+async function refreshSelectedAlbum() {
+  if (!selectedAlbum.value) return
+  try {
+    selectedAlbum.value = await api.getAlbum(selectedAlbum.value.id)
   } catch (error) {
     handleApiError(error)
   }

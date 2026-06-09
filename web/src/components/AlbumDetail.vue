@@ -4,7 +4,7 @@
     <div
       v-if="album && album.cover_url && !coverBroken"
       class="detail-backdrop"
-      :style="{ backgroundImage: `url(${album.cover_url})` }"
+      :style="{ backgroundImage: `url(${coverSrc})` }"
     ></div>
 
     <!-- 空数据展示 -->
@@ -22,7 +22,7 @@
       <div class="detail-header">
         <img
           v-if="album.cover_url && !coverBroken"
-          :src="album.cover_url"
+          :src="coverSrc"
           alt="Album cover artwork"
           class="detail-cover"
           @error="coverBroken = true"
@@ -32,7 +32,9 @@
         </div>
         
         <div class="detail-title-info">
-          <p class="eyebrow" style="color: var(--accent);">{{ album.year || '未知年份' }} · ALBUM</p>
+          <p class="eyebrow" style="color: var(--accent);">
+            {{ album.release_date || album.year || '未知年份' }}<span v-if="album.genre"> · {{ album.genre }}</span> · ALBUM
+          </p>
           <h3>{{ album.title }}</h3>
           <p class="muted" style="margin-top: 4px;">
             艺术家：<span class="artist-link">{{ album.artist || '未知艺术家' }}</span>
@@ -40,6 +42,17 @@
           <p class="muted" style="font-size: 12px; margin-top: 2px;">
             共收录 {{ album.tracks?.length || 0 }} 首高品质曲目
           </p>
+          <button
+            class="custom-btn-primary"
+            style="width: auto; padding: 8px 18px; font-size: 13px; margin-top: 12px; display: inline-flex; align-items: center; gap: 8px;"
+            type="button"
+            :disabled="scraping"
+            @click="handleScrape"
+          >
+            <span v-if="scraping" class="loading-spinner" aria-label="刮削中"></span>
+            <span>{{ scraping ? '刮削中…' : '🔍 刮削元数据' }}</span>
+          </button>
+          <p v-if="scrapeMessage" class="muted" style="font-size: 12px; margin-top: 8px;">{{ scrapeMessage }}</p>
         </div>
       </div>
 
@@ -88,16 +101,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { usePlayerStore } from '../stores/player'
-import type { AlbumDetail, TrackSummary } from '../api/client'
+import { ApiError, type ApiClient, type AlbumDetail, type TrackSummary } from '../api/client'
 
 const props = defineProps<{
   album: AlbumDetail | null
+  api: ApiClient
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   play: [track: TrackSummary]
+  refresh: []
 }>()
 
 // 引入全局播放 Store，监测当前歌曲和播放动画
@@ -111,11 +126,44 @@ function formatDuration(seconds: number) {
 }
 
 const coverBroken = ref(false)
+const scraping = ref(false)
+const scrapeMessage = ref('')
+const coverVersion = ref(0)
+
+// 带版本号的封面 URL：刮削后 bump 版本强制浏览器重取（同 URL 否则命中缓存）
+const coverSrc = computed(() =>
+  props.album ? `${props.album.cover_url}?v=${coverVersion.value}` : '',
+)
+
+async function handleScrape() {
+  if (!props.album || scraping.value) return
+  scraping.value = true
+  scrapeMessage.value = ''
+  try {
+    const res = await props.api.scrapeAlbum(props.album.id)
+    if (res.status === 'done') {
+      emit('refresh')
+      coverVersion.value++
+      scrapeMessage.value = '已更新'
+    } else {
+      scrapeMessage.value = '未匹配到专辑'
+    }
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      scrapeMessage.value = '未匹配到专辑'
+    } else {
+      scrapeMessage.value = '刮削失败，请重试'
+    }
+  } finally {
+    scraping.value = false
+  }
+}
 
 watch(
   () => props.album?.id,
   () => {
     coverBroken.value = false
+    scrapeMessage.value = ''
   },
 )
 </script>
