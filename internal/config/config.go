@@ -67,7 +67,8 @@ type LastFMConfig struct {
 }
 
 type AcoustIDConfig struct {
-	APIKey string `yaml:"api_key"`
+	APIKey     string `yaml:"api_key"`
+	FpcalcPath string `yaml:"fpcalc_path"`
 }
 
 type NeteaseConfig struct {
@@ -98,7 +99,7 @@ func Default() *Config {
 		Library:  LibraryConfig{ScanInterval: 3600, Watch: true},
 		Database: DatabaseConfig{Path: "./data/music.db"},
 		Cache:    CacheConfig{ArtworkDir: "./data/artwork", ArtworkMaxSizeMB: 2048, TranscodeDir: "./data/transcode"},
-		Scraper:  ScraperConfig{Enabled: true, Netease: NeteaseConfig{Enabled: true}},
+		Scraper:  ScraperConfig{Enabled: true, Netease: NeteaseConfig{Enabled: true}, AcoustID: AcoustIDConfig{FpcalcPath: "fpcalc"}},
 		Transcode: TranscodeConfig{
 			FFmpegPath:     "ffmpeg",
 			FfprobePath:    "ffprobe",
