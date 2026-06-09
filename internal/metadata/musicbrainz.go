@@ -142,7 +142,7 @@ func (c *MusicBrainzClient) doGet(ctx context.Context, endpoint string) ([]byte,
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("musicbrainz status %d", resp.StatusCode)
 	}
-	return io.ReadAll(resp.Body)
+	return io.ReadAll(io.LimitReader(resp.Body, 4<<20)) // 上限 4MiB，防止超大响应耗尽内存
 }
 
 // Search 按艺术家+专辑查询，返回择优后的 release；无匹配返回 ErrNotFound。
