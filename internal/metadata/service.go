@@ -34,7 +34,7 @@ func NewMetadataService(db *sql.DB, mb *MusicBrainzClient, cover *CoverArtClient
 	return &MetadataService{db: db, mb: mb, cover: cover, artworkDir: artworkDir}
 }
 
-// EnrichAlbum 为单张专辑查 MB 补元数据并下封面。
+// EnrichAlbum 为单张专辑补元数据 + 封面：指纹优先，文本搜索兜底。
 func (s *MetadataService) EnrichAlbum(ctx context.Context, albumID string) (EnrichOutcome, error) {
 	var title, artist string
 	var trackCount int
@@ -50,16 +50,62 @@ func (s *MetadataService) EnrichAlbum(ctx context.Context, albumID string) (Enri
 		return EnrichOutcome{}, err
 	}
 
-	match, err := s.mb.Search(ctx, AlbumQuery{AlbumTitle: title, ArtistName: artist, TrackCount: trackCount})
-	if errors.Is(err, ErrNotFound) {
-		s.setStatus(ctx, albumID, "failed")
-		return EnrichOutcome{Status: "failed"}, nil
+	// 指纹路径：本专辑曲目有 recording MBID 时，投票定位权威 release。
+	match, ok := s.resolveByFingerprint(ctx, albumID)
+	if !ok {
+		// 文本兜底
+		var ferr error
+		match, ferr = s.mb.Search(ctx, AlbumQuery{AlbumTitle: title, ArtistName: artist, TrackCount: trackCount})
+		if errors.Is(ferr, ErrNotFound) {
+			s.setStatus(ctx, albumID, "failed")
+			return EnrichOutcome{Status: "failed"}, nil
+		}
+		if ferr != nil {
+			return EnrichOutcome{}, ferr
+		}
 	}
+	return s.applyMatch(ctx, albumID, match)
+}
+
+// resolveByFingerprint 用本专辑曲目的 recording MBID 投票定位 release；无可用指纹/无结果 → false。
+func (s *MetadataService) resolveByFingerprint(ctx context.Context, albumID string) (ReleaseMatch, bool) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT mbid FROM tracks
+		WHERE album_id=? AND is_available=1 AND mbid IS NOT NULL AND mbid<>''
+		LIMIT 5`, albumID)
 	if err != nil {
-		return EnrichOutcome{}, err
+		return ReleaseMatch{}, false
+	}
+	var recMBIDs []string
+	for rows.Next() {
+		var m string
+		if err := rows.Scan(&m); err == nil {
+			recMBIDs = append(recMBIDs, m)
+		}
+	}
+	rows.Close()
+	if len(recMBIDs) == 0 {
+		return ReleaseMatch{}, false
 	}
 
-	// 元数据落库：release_date/genre 用 COALESCE(NULLIF) 仅在非空时覆盖。
+	var releasesPerTrack [][]string
+	for _, rm := range recMBIDs {
+		rels, err := s.mb.RecordingReleases(ctx, rm)
+		if err != nil {
+			continue // 瞬时失败：跳过该曲，靠其余曲目投票
+		}
+		releasesPerTrack = append(releasesPerTrack, rels)
+	}
+	releaseMBID, ok := pickByVote(releasesPerTrack)
+	if !ok {
+		return ReleaseMatch{}, false
+	}
+	date, _ := s.mb.ReleaseDate(ctx, releaseMBID) // best-effort，失败则 date 空
+	return ReleaseMatch{MBID: releaseMBID, ReleaseDate: date}, true
+}
+
+// applyMatch 把选中的 release 落库（元数据 + mbid + 封面 + 状态 done）。
+func (s *MetadataService) applyMatch(ctx context.Context, albumID string, match ReleaseMatch) (EnrichOutcome, error) {
 	if _, err := s.db.ExecContext(ctx, `
 		UPDATE albums SET
 			release_date=COALESCE(NULLIF(?,''),release_date),
@@ -73,9 +119,7 @@ func (s *MetadataService) EnrichAlbum(ctx context.Context, albumID string) (Enri
 	if _, err := s.db.ExecContext(ctx, `UPDATE albums SET mbid=? WHERE id=?`, match.MBID, albumID); err != nil {
 		slog.Warn("设置专辑 mbid 失败（可能 UNIQUE 冲突）", "album", albumID, "mbid", match.MBID, "err", err)
 	}
-
 	hasCover := s.downloadCover(ctx, albumID, match.MBID)
-
 	s.setStatus(ctx, albumID, "done")
 	return EnrichOutcome{Status: "done", MBID: match.MBID, HasCover: hasCover}, nil
 }

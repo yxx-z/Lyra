@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/yxx-z/lyra/internal/db"
@@ -122,6 +123,48 @@ func TestEnrichAlbum_AlbumNotFound(t *testing.T) {
 	_, err := newSvc(t, database, mbURL, caaURL, t.TempDir()).EnrichAlbum(context.Background(), "nonexistent")
 	if !errors.Is(err, ErrAlbumNotFound) {
 		t.Errorf("不存在的专辑应 ErrAlbumNotFound，得到 %v", err)
+	}
+}
+
+func TestEnrichAlbum_FingerprintPath(t *testing.T) {
+	database, id := setupAlbum(t, 2) // 专辑 al1 + 曲目 tra/trb
+	if _, err := database.Exec(`UPDATE tracks SET mbid='rec-a' WHERE id='tra'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`UPDATE tracks SET mbid='rec-b' WHERE id='trb'`); err != nil {
+		t.Fatal(err)
+	}
+
+	mb := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/ws/2/recording/"):
+			// 两首都覆盖 rel-album；其中也含 rel-comp（仅个别）
+			w.Write([]byte(`{"releases":[{"id":"rel-album"},{"id":"rel-comp"}]}`))
+		case strings.Contains(r.URL.Path, "/ws/2/release/"):
+			w.Write([]byte(`{"id":"rel-album","date":"2003-07-31"}`))
+		default:
+			w.Write([]byte(`{"releases":[]}`)) // 文本兜底（不应走到）
+		}
+	}))
+	defer mb.Close()
+	caa := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound) // 无封面，简化
+	}))
+	defer caa.Close()
+	svc := newSvc(t, database, mb.URL, caa.URL, t.TempDir())
+	svc.mb.minInterval = 0 // 消除节流延迟，加速测试
+
+	out, err := svc.EnrichAlbum(context.Background(), id)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if out.Status != "done" || out.MBID != "rel-album" {
+		t.Fatalf("应走指纹路径选 rel-album，得到 %+v", out)
+	}
+	var mbid, date string
+	database.QueryRow(`SELECT COALESCE(mbid,''),COALESCE(release_date,'') FROM albums WHERE id=?`, id).Scan(&mbid, &date)
+	if mbid != "rel-album" || date != "2003-07-31" {
+		t.Errorf("落库 mbid=%q date=%q", mbid, date)
 	}
 }
 
