@@ -10,11 +10,20 @@ import (
 const subsonicAPIVersion = "1.16.1"
 const subsonicXmlns = "http://subsonic.org/restapi"
 
+// OpenSubsonic 服务器标识：客户端（如 Symfonium）据此识别服务器类型并启用扩展能力。
+const (
+	openSubsonicType          = "lyra"
+	openSubsonicServerVersion = "0.1.0"
+)
+
 type Response struct {
 	XMLName       xml.Name       `xml:"subsonic-response" json:"-"`
 	Xmlns         string         `xml:"xmlns,attr" json:"-"`
 	Status        string         `xml:"status,attr" json:"status"`
 	Version       string         `xml:"version,attr" json:"version"`
+	Type          string         `xml:"type,attr,omitempty" json:"type,omitempty"`
+	ServerVersion string         `xml:"serverVersion,attr,omitempty" json:"serverVersion,omitempty"`
+	OpenSubsonic  bool           `xml:"openSubsonic,attr,omitempty" json:"openSubsonic,omitempty"`
 	Error         *Error         `xml:"error,omitempty" json:"error,omitempty"`
 	License       *License       `xml:"license,omitempty" json:"license,omitempty"`
 	MusicFolders  *MusicFolders  `xml:"musicFolders,omitempty" json:"musicFolders,omitempty"`
@@ -24,6 +33,28 @@ type Response struct {
 	AlbumList2    *AlbumList2    `xml:"albumList2,omitempty" json:"albumList2,omitempty"`
 	Song          *Child         `xml:"song,omitempty" json:"song,omitempty"`
 	SearchResult3 *SearchResult3 `xml:"searchResult3,omitempty" json:"searchResult3,omitempty"`
+	Genres        *Genres        `xml:"genres,omitempty" json:"genres,omitempty"`
+	Starred2      *Starred2      `xml:"starred2,omitempty" json:"starred2,omitempty"`
+	Bookmarks     *Bookmarks     `xml:"bookmarks,omitempty" json:"bookmarks,omitempty"`
+}
+
+// 以下为第一期未实现、但客户端（Symfonium 等）启动时会探测的端点的空容器，
+// 返回合法的空 Subsonic 响应以免客户端因纯文本 404 解析失败而中断同步。
+type Genres struct {
+	Genre []Genre `xml:"genre" json:"genre"`
+}
+type Genre struct {
+	SongCount  int    `xml:"songCount,attr" json:"songCount"`
+	AlbumCount int    `xml:"albumCount,attr" json:"albumCount"`
+	Value      string `xml:",chardata" json:"value"`
+}
+type Starred2 struct {
+	Artist []ArtistID3 `xml:"artist,omitempty" json:"artist,omitempty"`
+	Album  []AlbumID3  `xml:"album,omitempty" json:"album,omitempty"`
+	Song   []Child     `xml:"song,omitempty" json:"song,omitempty"`
+}
+type Bookmarks struct {
+	Bookmark []struct{} `xml:"bookmark,omitempty" json:"bookmark,omitempty"`
 }
 
 type Error struct {
@@ -106,6 +137,9 @@ func writeResponse(w http.ResponseWriter, r *http.Request, resp *Response) {
 	}
 	resp.Version = subsonicAPIVersion
 	resp.Xmlns = subsonicXmlns
+	resp.Type = openSubsonicType
+	resp.ServerVersion = openSubsonicServerVersion
+	resp.OpenSubsonic = true
 
 	switch r.Form.Get("f") {
 	case "json", "jsonp":

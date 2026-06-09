@@ -38,6 +38,32 @@ func TestWriteResponse_JSON(t *testing.T) {
 	}
 }
 
+// TestWriteResponse_OpenSubsonicFields 验证响应携带 OpenSubsonic 识别字段
+// （Symfonium 等客户端据此识别服务器，否则报“未识别的服务器”）。
+func TestWriteResponse_OpenSubsonicFields(t *testing.T) {
+	// JSON
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/rest/ping?f=json", nil)
+	writeResponse(w, r, &Response{})
+	var got map[string]map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("非合法 JSON: %v", err)
+	}
+	sr := got["subsonic-response"]
+	if sr["openSubsonic"] != true || sr["type"] != "lyra" || sr["serverVersion"] != "0.1.0" {
+		t.Errorf("缺少 OpenSubsonic 字段: %v", sr)
+	}
+
+	// XML
+	w2 := httptest.NewRecorder()
+	r2 := httptest.NewRequest("GET", "/rest/ping", nil)
+	writeResponse(w2, r2, &Response{})
+	if b := w2.Body.String(); !strings.Contains(b, `openSubsonic="true"`) ||
+		!strings.Contains(b, `type="lyra"`) || !strings.Contains(b, `serverVersion="0.1.0"`) {
+		t.Errorf("XML 缺少 OpenSubsonic 字段: %s", b)
+	}
+}
+
 func TestWriteError(t *testing.T) {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/rest/ping?f=json", nil)

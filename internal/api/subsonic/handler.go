@@ -49,6 +49,17 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	h.reg(r, "getCoverArt", h.getCoverArt)
 	h.reg(r, "stream", h.stream)
 	h.reg(r, "scrobble", h.scrobble)
+
+	// 客户端启动探测的只读端点（第一期空实现，详见 stubs.go）
+	h.reg(r, "getGenres", h.getGenres)
+	h.reg(r, "getStarred2", h.getStarred2)
+	h.reg(r, "getBookmarks", h.getBookmarks)
+
+	// 兜底：任何未实现的 /rest 端点返回可解析的 Subsonic 错误封套，
+	// 而非 chi 默认的纯文本 404（后者会让 Subsonic 客户端 JSON 解析失败）。
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		writeError(w, r, 0, "未实现的端点")
+	})
 }
 
 // withAuth 在调用真正 handler 前校验 Subsonic 认证。
