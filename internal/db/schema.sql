@@ -50,12 +50,14 @@ CREATE TABLE tracks (
 );
 
 CREATE TABLE lyrics (
-    track_id    TEXT PRIMARY KEY REFERENCES tracks(id),
-    lrc_content TEXT,
-    yrc_content TEXT,
-    source      TEXT,
-    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    track_id     TEXT PRIMARY KEY REFERENCES tracks(id),
+    lrc_content  TEXT,
+    yrc_content  TEXT,
+    source       TEXT,
+    updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    sync_checked INTEGER DEFAULT 0
 );
+CREATE INDEX idx_lyrics_sync_checked ON lyrics(sync_checked);
 
 CREATE TABLE playlists (
     id         TEXT PRIMARY KEY,

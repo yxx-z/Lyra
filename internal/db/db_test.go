@@ -75,3 +75,21 @@ func TestOpen_AlbumsHasScrapeStatusColumn(t *testing.T) {
 		t.Fatal("albums 表应有 scrape_status 列")
 	}
 }
+
+func TestOpen_LyricsHasSyncCheckedColumn(t *testing.T) {
+	dir := t.TempDir()
+	db, err := Open(dir + "/test.db")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer db.Close()
+
+	rows, err := db.Query(`SELECT name FROM pragma_table_info('lyrics') WHERE name='sync_checked'`)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		t.Fatal("lyrics 表应有 sync_checked 列")
+	}
+}
