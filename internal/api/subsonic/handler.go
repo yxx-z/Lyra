@@ -46,6 +46,9 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	// Task 5: search3
 	h.reg(r, "search3", h.search3)
 	// Task 6: getCoverArt/stream/scrobble
+	h.reg(r, "getCoverArt", h.getCoverArt)
+	h.reg(r, "stream", h.stream)
+	h.reg(r, "scrobble", h.scrobble)
 }
 
 // withAuth 在调用真正 handler 前校验 Subsonic 认证。
