@@ -67,3 +67,55 @@ func TestScrape_TrackNotFound(t *testing.T) {
 		t.Errorf("want 404, got %d", w.Code)
 	}
 }
+
+func TestUpgradeLyrics_Upgraded(t *testing.T) {
+	d := newTestDB(t)
+	insertTestData(t, d)
+	svc := lyrics.NewLyricsService(d, stubProvider{res: lyrics.Result{LRCContent: "[00:01.00]hi", Source: "lrclib"}})
+	h := NewScrapeHandler(svc)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/tracks/t1/lyrics/upgrade", nil)
+	h.upgradeLyrics(w, req, "t1")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d", w.Code)
+	}
+	var resp ScrapeResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp.Status != "upgraded" || resp.Source != "lrclib" {
+		t.Errorf("got %+v", resp)
+	}
+}
+
+func TestUpgradeLyrics_NoSynced(t *testing.T) {
+	d := newTestDB(t)
+	insertTestData(t, d)
+	svc := lyrics.NewLyricsService(d, stubProvider{res: lyrics.Result{LRCContent: "纯文本无时间轴", Source: "lrclib"}})
+	h := NewScrapeHandler(svc)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/tracks/t1/lyrics/upgrade", nil)
+	h.upgradeLyrics(w, req, "t1")
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d", w.Code)
+	}
+	var resp ScrapeResponse
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp.Status != "no_synced" {
+		t.Errorf("got %+v", resp)
+	}
+}
+
+func TestUpgradeLyrics_TrackNotFound(t *testing.T) {
+	d := newTestDB(t)
+	svc := lyrics.NewLyricsService(d)
+	h := NewScrapeHandler(svc)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/tracks/nope/lyrics/upgrade", nil)
+	h.upgradeLyrics(w, req, "nope")
+	if w.Code != http.StatusNotFound {
+		t.Errorf("want 404, got %d", w.Code)
+	}
+}

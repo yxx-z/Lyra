@@ -68,6 +68,7 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 		)
 		scrape := v1.NewScrapeHandler(lyricsService)
 		r.Post("/tracks/{id}/scrape", scrape.ScrapeTrack)
+		r.Post("/tracks/{id}/lyrics/upgrade", scrape.UpgradeLyrics)
 
 		metadataService := metadatapkg.NewMetadataService(
 			db,

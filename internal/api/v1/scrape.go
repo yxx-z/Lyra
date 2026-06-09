@@ -59,6 +59,32 @@ func (h *ScrapeHandler) scrapeTrack(w http.ResponseWriter, r *http.Request, trac
 	})
 }
 
+// UpgradeLyrics handles POST /api/v1/tracks/{id}/lyrics/upgrade.
+func (h *ScrapeHandler) UpgradeLyrics(w http.ResponseWriter, r *http.Request) {
+	h.upgradeLyrics(w, r, chi.URLParam(r, "id"))
+}
+
+func (h *ScrapeHandler) upgradeLyrics(w http.ResponseWriter, r *http.Request, trackID string) {
+	if h.service == nil {
+		writeJSONError(w, http.StatusBadGateway, "歌词刮削源不可用")
+		return
+	}
+	outcome, err := h.service.UpgradeToSynced(r.Context(), trackID)
+	if err != nil {
+		if errors.Is(err, lyrics.ErrTrackNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		writeJSONError(w, http.StatusBadGateway, "同步歌词升级失败")
+		return
+	}
+	writeScrapeJSON(w, ScrapeResponse{
+		TrackID: trackID,
+		Status:  outcome.Status,
+		Source:  outcome.Source,
+	})
+}
+
 func writeScrapeJSON(w http.ResponseWriter, resp ScrapeResponse) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
