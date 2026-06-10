@@ -9,6 +9,7 @@ import (
 	v1 "github.com/yxx-z/lyra/internal/api/v1"
 	"github.com/yxx-z/lyra/internal/config"
 	"github.com/yxx-z/lyra/internal/db"
+	"github.com/yxx-z/lyra/internal/transcode"
 )
 
 func testHandler(t *testing.T) (*Handler, *config.Config) {
@@ -22,7 +23,9 @@ func testHandler(t *testing.T) (*Handler, *config.Config) {
 	cfg.Auth.Username = "admin"
 	cfg.Subsonic.Password = "secret"
 	cfg.Subsonic.Enabled = true
-	stream := v1.NewStreamHandler(d, cfg.Transcode, t.TempDir())
+	tcache := transcode.NewCache(t.TempDir(), 0)
+	tsvc := transcode.NewService(cfg.Transcode.FFmpegPath, cfg.Transcode.DefaultBitrate, tcache)
+	stream := v1.NewStreamHandler(d, tsvc)
 	cover := v1.NewCoverHandler(d)
 	return NewHandler(d, cfg, stream, cover), cfg
 }

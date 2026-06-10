@@ -2,50 +2,24 @@
 package v1
 
 import (
-	"context"
 	"database/sql"
-	"log/slog"
 	"net/http"
-	"os"
-	"os/exec"
-	"strconv"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/yxx-z/lyra/internal/config"
+	"github.com/yxx-z/lyra/internal/transcode"
 )
 
-var audioContentTypes = map[string]string{
-	"mp3":  "audio/mpeg",
-	"ogg":  "audio/ogg",
-	"opus": "audio/ogg",
-	"wav":  "audio/wav",
-}
-
-// StreamHandler handles GET /api/v1/tracks/:id/stream.
+// StreamHandler 按 trackID 查库并委托 transcode.Service 输出音频。
 type StreamHandler struct {
-	db        *sql.DB
-	transcode config.TranscodeConfig
-	cache     *TranscodeCache
+	db  *sql.DB
+	svc *transcode.Service
 }
 
-// NewStreamHandler creates a StreamHandler backed by db, using transcode config
-// and a disk cache rooted at cacheDir.
-func NewStreamHandler(db *sql.DB, transcode config.TranscodeConfig, cacheDir string) *StreamHandler {
-	if transcode.FFmpegPath == "" {
-		transcode.FFmpegPath = "ffmpeg"
-	}
-	if transcode.DefaultFormat == "" {
-		transcode.DefaultFormat = "mp3"
-	}
-	if transcode.DefaultBitrate == 0 {
-		transcode.DefaultBitrate = 192
-	}
-	return &StreamHandler{
-		db:        db,
-		transcode: transcode,
-		cache:     NewTranscodeCache(cacheDir),
-	}
+// NewStreamHandler 创建 StreamHandler，复用传入的转码 Service。
+func NewStreamHandler(db *sql.DB, svc *transcode.Service) *StreamHandler {
+	return &StreamHandler{db: db, svc: svc}
 }
 
 // Stream handles GET /api/v1/tracks/:id/stream.
@@ -53,101 +27,21 @@ func (h *StreamHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	h.StreamByID(w, r, chi.URLParam(r, "id"))
 }
 
-// StreamByID 按 trackID 输出音频（直传或转码）。
+// StreamByID 按 trackID 查库后委托 Service 直传或转码。
 func (h *StreamHandler) StreamByID(w http.ResponseWriter, r *http.Request, trackID string) {
 	var filePath, format string
+	var bitrate int
 	err := h.db.QueryRow(
-		`SELECT file_path, format FROM tracks WHERE id=? AND is_available=1`,
+		`SELECT file_path, COALESCE(format,''), COALESCE(bitrate,0) FROM tracks WHERE id=? AND is_available=1`,
 		trackID,
-	).Scan(&filePath, &format)
+	).Scan(&filePath, &format, &bitrate)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-
 	format = strings.ToLower(format)
-	if ct, ok := audioContentTypes[format]; ok {
-		w.Header().Set("Content-Type", ct)
-		http.ServeFile(w, r, filePath)
-		return
+	if format == "" {
+		format = strings.TrimPrefix(strings.ToLower(filepath.Ext(filePath)), ".")
 	}
-
-	h.serveTranscoded(w, r, trackID, filePath)
-}
-
-// serveTranscoded serves an mp3 transcode of filePath, caching the result to
-// disk so subsequent requests (and Range/seek) are served via http.ServeFile.
-func (h *StreamHandler) serveTranscoded(w http.ResponseWriter, r *http.Request, trackID, filePath string) {
-	bitrate := h.transcode.DefaultBitrate
-	cachePath := h.cache.Path(trackID, "mp3", bitrate)
-	key := h.cache.key(trackID, "mp3", bitrate)
-
-	// 命中缓存：直接 ServeFile（自带 Range）
-	if _, err := os.Stat(cachePath); err == nil {
-		prepareAudioResponse(w, r, "audio/mpeg")
-		http.ServeFile(w, r, cachePath)
-		return
-	}
-
-	// 未命中：加锁转码（同一曲目并发请求只转一次）
-	lock := h.cache.lockFor(key)
-	lock.Lock()
-	// double-check：可能其他请求已转好
-	if _, err := os.Stat(cachePath); err != nil {
-		if terr := h.transcodeToFile(filePath, cachePath, bitrate); terr != nil {
-			lock.Unlock()
-			if r.Context().Err() != nil {
-				return // 客户端断开
-			}
-			writeJSONError(w, http.StatusInternalServerError, "转码失败")
-			return
-		}
-	}
-	lock.Unlock()
-
-	prepareAudioResponse(w, r, "audio/mpeg")
-	http.ServeFile(w, r, cachePath)
-}
-
-func prepareAudioResponse(w http.ResponseWriter, r *http.Request, contentType string) {
-	r.Header.Del("If-Modified-Since")
-	r.Header.Del("If-None-Match")
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "no-store")
-}
-
-// transcodeToFile transcodes filePath to mp3 at the given bitrate, writing to a
-// temp file then atomically renaming to dst. A failed run cleans up the temp file.
-func (h *StreamHandler) transcodeToFile(filePath, dst string, bitrate int) error {
-	if err := os.MkdirAll(h.cache.dir, 0o755); err != nil {
-		return err
-	}
-	tmp := dst + ".tmp"
-
-	cmd := exec.CommandContext(
-		context.Background(),
-		h.transcode.FFmpegPath,
-		"-hide_banner",
-		"-loglevel", "error",
-		"-i", filePath,
-		"-vn",
-		"-codec:a", "libmp3lame",
-		"-b:a", strconv.Itoa(bitrate)+"k",
-		"-f", "mp3",
-		"-y",
-		tmp,
-	)
-	if err := cmd.Run(); err != nil {
-		if rmErr := os.Remove(tmp); rmErr != nil && !os.IsNotExist(rmErr) {
-			slog.Warn("清理转码临时文件失败", "path", tmp, "err", rmErr)
-		}
-		return err
-	}
-	if err := os.Rename(tmp, dst); err != nil {
-		if rmErr := os.Remove(tmp); rmErr != nil && !os.IsNotExist(rmErr) {
-			slog.Warn("清理转码临时文件失败", "path", tmp, "err", rmErr)
-		}
-		return err
-	}
-	return nil
+	h.svc.Serve(w, r, transcode.Source{ID: trackID, Path: filePath, Format: format, Bitrate: bitrate})
 }

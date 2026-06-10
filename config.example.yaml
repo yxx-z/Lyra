@@ -23,6 +23,7 @@ cache:
   artwork_dir: ./data/artwork
   artwork_max_size_mb: 2048
   transcode_dir: ./data/transcode
+  transcode_max_size_mb: 2048   # 转码缓存上限，0=不限
 
 scraper:
   enabled: true

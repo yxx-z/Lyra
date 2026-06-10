@@ -17,6 +17,7 @@ import (
 	lyricspkg "github.com/yxx-z/lyra/internal/lyrics"
 	metadatapkg "github.com/yxx-z/lyra/internal/metadata"
 	"github.com/yxx-z/lyra/internal/scanner"
+	"github.com/yxx-z/lyra/internal/transcode"
 	"github.com/yxx-z/lyra/ui"
 )
 
@@ -27,6 +28,10 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 	r := chi.NewRouter()
 	r.Use(chiMiddleware.Logger)
 	r.Use(chiMiddleware.Recoverer)
+
+	tcache := transcode.NewCache(cfg.Cache.TranscodeDir, cfg.Cache.TranscodeMaxSizeMB)
+	tsvc := transcode.NewService(cfg.Transcode.FFmpegPath, cfg.Transcode.DefaultBitrate, tcache)
+	streamH := v1.NewStreamHandler(db, tsvc)
 
 	r.Get("/health", handleHealth)
 
@@ -54,8 +59,7 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 		cover := v1.NewCoverHandler(db)
 		r.Get("/cover/{id}", cover.GetCover)
 
-		stream := v1.NewStreamHandler(db, cfg.Transcode, cfg.Cache.TranscodeDir)
-		r.Get("/tracks/{id}/stream", stream.Stream)
+		r.Get("/tracks/{id}/stream", streamH.Stream)
 
 		lyrics := v1.NewLyricsHandler(db)
 		r.Get("/tracks/{id}/lyrics", lyrics.GetLyrics)
@@ -84,9 +88,8 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 		r.Get("/search", search.Search)
 	})
 
-	subStream := v1.NewStreamHandler(db, cfg.Transcode, cfg.Cache.TranscodeDir)
 	subCover := v1.NewCoverHandler(db)
-	subHandler := subsonic.NewHandler(db, cfg, subStream, subCover)
+	subHandler := subsonic.NewHandler(db, cfg, streamH, subCover)
 	r.Route("/rest", subHandler.RegisterRoutes)
 
 	// 所有非 API 路由返回嵌入的前端文件

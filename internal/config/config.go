@@ -44,9 +44,10 @@ type DatabaseConfig struct {
 }
 
 type CacheConfig struct {
-	ArtworkDir       string `yaml:"artwork_dir"`
-	ArtworkMaxSizeMB int    `yaml:"artwork_max_size_mb"`
-	TranscodeDir     string `yaml:"transcode_dir"`
+	ArtworkDir         string `yaml:"artwork_dir"`
+	ArtworkMaxSizeMB   int    `yaml:"artwork_max_size_mb"`
+	TranscodeDir       string `yaml:"transcode_dir"`
+	TranscodeMaxSizeMB int    `yaml:"transcode_max_size_mb"`
 }
 
 type ScraperConfig struct {

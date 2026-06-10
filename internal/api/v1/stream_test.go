@@ -2,26 +2,31 @@
 package v1
 
 import (
-	"context"
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
-	"time"
 
-	"github.com/yxx-z/lyra/internal/config"
+	"github.com/yxx-z/lyra/internal/transcode"
 )
 
-func TestStream_ServesFile(t *testing.T) {
+func newStreamHandler(t *testing.T, ffmpegPath string) (*StreamHandler, *sql.DB) {
+	t.Helper()
 	d := newTestDB(t)
+	cache := transcode.NewCache(t.TempDir(), 0)
+	svc := transcode.NewService(ffmpegPath, 192, cache)
+	return NewStreamHandler(d, svc), d
+}
+
+func TestStream_PassthroughMP3(t *testing.T) {
+	h, d := newStreamHandler(t, "ffmpeg")
 	dir := t.TempDir()
 	audioFile := filepath.Join(dir, "test.mp3")
-	if err := os.WriteFile(audioFile, []byte("FAKEMP3DATA"), 0644); err != nil {
+	if err := os.WriteFile(audioFile, []byte("ORIGINALMP3"), 0644); err != nil {
 		t.Fatal(err)
 	}
-
 	if _, err := d.Exec(`INSERT INTO artists(id,name) VALUES('a1','A')`); err != nil {
 		t.Fatal(err)
 	}
@@ -31,196 +36,55 @@ func TestStream_ServesFile(t *testing.T) {
 	if _, err := d.Exec(`INSERT INTO tracks(id,title,artist_id,album_id,file_path,format,is_available,scrape_status) VALUES('t1','T','a1','al1',?,'mp3',1,'pending')`, audioFile); err != nil {
 		t.Fatal(err)
 	}
-
-	h := NewStreamHandler(d, config.TranscodeConfig{}, t.TempDir())
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/tracks/t1/stream", nil)
 	h.StreamByID(w, req, "t1")
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("want 200, got %d", w.Code)
+	if w.Code != http.StatusOK || w.Body.String() != "ORIGINALMP3" {
+		t.Fatalf("直传应原样返回: %d %q", w.Code, w.Body.String())
 	}
 	if ct := w.Header().Get("Content-Type"); ct != "audio/mpeg" {
-		t.Errorf("want Content-Type audio/mpeg, got %q", ct)
+		t.Errorf("Content-Type=%q", ct)
 	}
 }
 
-func TestStream_TranscodesM4AToMP3(t *testing.T) {
-	d := newTestDB(t)
-	dir := t.TempDir()
-	audioFile := filepath.Join(dir, "test.m4a")
-	if err := os.WriteFile(audioFile, []byte("FAKEM4ADATA"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	// mock ffmpeg：把 MP3DATA 写到最后一个参数（输出文件路径），而非 stdout
-	ffmpeg := filepath.Join(dir, "ffmpeg")
-	script := "#!/bin/sh\neval \"out=\\${$#}\"\nprintf MP3DATA > \"$out\"\n"
+func TestStream_TranscodeOnFormatParam(t *testing.T) {
+	ffmpeg := filepath.Join(t.TempDir(), "ffmpeg")
+	script := "#!/bin/sh\nout=\"\"\nfor a in \"$@\"; do out=\"$a\"; done\nif [ \"$out\" = \"pipe:1\" ]; then printf MP3DATA; else printf MP3DATA > \"$out\"; fi\n"
 	if err := os.WriteFile(ffmpeg, []byte(script), 0755); err != nil {
 		t.Fatal(err)
 	}
-
+	h, d := newStreamHandler(t, ffmpeg)
+	dir := t.TempDir()
+	audioFile := filepath.Join(dir, "test.flac")
+	if err := os.WriteFile(audioFile, []byte("FLACDATA"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := d.Exec(`INSERT INTO artists(id,name) VALUES('a1','A')`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := d.Exec(`INSERT INTO albums(id,title,artist_id) VALUES('al1','B','a1')`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Exec(`INSERT INTO tracks(id,title,artist_id,album_id,file_path,format,is_available,scrape_status) VALUES('t1','T','a1','al1',?,'m4a',1,'pending')`, audioFile); err != nil {
+	if _, err := d.Exec(`INSERT INTO tracks(id,title,artist_id,album_id,file_path,format,is_available,scrape_status) VALUES('t1','T','a1','al1',?,'flac',1,'pending')`, audioFile); err != nil {
 		t.Fatal(err)
 	}
-
-	h := NewStreamHandler(d, config.TranscodeConfig{
-		FFmpegPath:     ffmpeg,
-		DefaultFormat:  "mp3",
-		DefaultBitrate: 192,
-	}, t.TempDir())
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/tracks/t1/stream", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tracks/t1/stream?format=mp3", nil)
 	h.StreamByID(w, req, "t1")
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("want 200, got %d", w.Code)
+	if w.Code != http.StatusOK || w.Body.String() != "MP3DATA" {
+		t.Fatalf("转码应返回 ffmpeg 输出: %d %q", w.Code, w.Body.String())
 	}
 	if ct := w.Header().Get("Content-Type"); ct != "audio/mpeg" {
-		t.Errorf("want Content-Type audio/mpeg, got %q", ct)
-	}
-	if body := w.Body.String(); body != "MP3DATA" {
-		t.Errorf("want transcoded body MP3DATA, got %q", body)
+		t.Errorf("Content-Type=%q", ct)
 	}
 }
 
 func TestStream_NotFound(t *testing.T) {
-	d := newTestDB(t)
-	h := NewStreamHandler(d, config.TranscodeConfig{}, t.TempDir())
+	h, _ := newStreamHandler(t, "ffmpeg")
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/tracks/nope/stream", nil)
 	h.StreamByID(w, req, "nope")
 	if w.Code != http.StatusNotFound {
-		t.Errorf("want 404, got %d", w.Code)
-	}
-}
-
-func TestStream_TranscodeCacheHit(t *testing.T) {
-	d := newTestDB(t)
-	dir := t.TempDir()
-	audioFile := filepath.Join(dir, "test.m4a")
-	if err := os.WriteFile(audioFile, []byte("FAKEM4ADATA"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	// mock ffmpeg：调用计数器 —— 第二次请求应命中缓存，不再调用
-	ffmpeg := filepath.Join(dir, "ffmpeg")
-	marker := filepath.Join(dir, "called")
-	script := "#!/bin/sh\neval \"out=\\${$#}\"\nprintf MP3DATA > \"$out\"\necho x >> " + marker + "\n"
-	if err := os.WriteFile(ffmpeg, []byte(script), 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := d.Exec(`INSERT INTO artists(id,name) VALUES('a1','A')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := d.Exec(`INSERT INTO albums(id,title,artist_id) VALUES('al1','B','a1')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := d.Exec(`INSERT INTO tracks(id,title,artist_id,album_id,file_path,format,is_available,scrape_status) VALUES('t1','T','a1','al1',?,'m4a',1,'pending')`, audioFile); err != nil {
-		t.Fatal(err)
-	}
-
-	cacheDir := t.TempDir()
-	h := NewStreamHandler(d, config.TranscodeConfig{FFmpegPath: ffmpeg, DefaultBitrate: 192}, cacheDir)
-
-	for i := 0; i < 2; i++ {
-		w := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/tracks/t1/stream", nil)
-		h.StreamByID(w, req, "t1")
-		if w.Code != http.StatusOK {
-			t.Fatalf("request %d: want 200, got %d", i, w.Code)
-		}
-	}
-
-	// ffmpeg 只应被调用一次（第二次命中缓存）
-	data, _ := os.ReadFile(marker)
-	if got := strings.Count(string(data), "x"); got != 1 {
-		t.Errorf("ffmpeg called %d times, want 1 (second request should hit cache)", got)
-	}
-}
-
-func TestStream_TranscodeIgnoresCanceledProbeRequest(t *testing.T) {
-	d := newTestDB(t)
-	dir := t.TempDir()
-	audioFile := filepath.Join(dir, "test.m4a")
-	if err := os.WriteFile(audioFile, []byte("FAKEM4ADATA"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	ffmpeg := filepath.Join(dir, "ffmpeg")
-	script := "#!/bin/sh\neval \"out=\\${$#}\"\nprintf MP3DATA > \"$out\"\n"
-	if err := os.WriteFile(ffmpeg, []byte(script), 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := d.Exec(`INSERT INTO artists(id,name) VALUES('a1','A')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := d.Exec(`INSERT INTO albums(id,title,artist_id) VALUES('al1','B','a1')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := d.Exec(`INSERT INTO tracks(id,title,artist_id,album_id,file_path,format,is_available,scrape_status) VALUES('t1','T','a1','al1',?,'m4a',1,'pending')`, audioFile); err != nil {
-		t.Fatal(err)
-	}
-
-	cacheDir := t.TempDir()
-	h := NewStreamHandler(d, config.TranscodeConfig{FFmpegPath: ffmpeg, DefaultBitrate: 192}, cacheDir)
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/tracks/t1/stream", nil).WithContext(ctx)
-	w := httptest.NewRecorder()
-
-	h.StreamByID(w, req, "t1")
-
-	cachePath := h.cache.Path("t1", "mp3", 192)
-	if _, err := os.Stat(cachePath); err != nil {
-		t.Fatalf("want cache file after canceled request, got %v", err)
-	}
-}
-
-func TestStream_CachedTranscodeIgnoresBrowserCacheValidators(t *testing.T) {
-	d := newTestDB(t)
-	dir := t.TempDir()
-	audioFile := filepath.Join(dir, "test.m4a")
-	if err := os.WriteFile(audioFile, []byte("FAKEM4ADATA"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := d.Exec(`INSERT INTO artists(id,name) VALUES('a1','A')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := d.Exec(`INSERT INTO albums(id,title,artist_id) VALUES('al1','B','a1')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := d.Exec(`INSERT INTO tracks(id,title,artist_id,album_id,file_path,format,is_available,scrape_status) VALUES('t1','T','a1','al1',?,'m4a',1,'pending')`, audioFile); err != nil {
-		t.Fatal(err)
-	}
-
-	cacheDir := t.TempDir()
-	h := NewStreamHandler(d, config.TranscodeConfig{DefaultBitrate: 192}, cacheDir)
-	cachePath := h.cache.Path("t1", "mp3", 192)
-	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(cachePath, []byte("MP3DATA"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/tracks/t1/stream", nil)
-	req.Header.Set("If-Modified-Since", time.Now().Add(time.Hour).UTC().Format(http.TimeFormat))
-	w := httptest.NewRecorder()
-	h.StreamByID(w, req, "t1")
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("want 200, got %d", w.Code)
-	}
-	if cacheControl := w.Header().Get("Cache-Control"); cacheControl != "no-store" {
-		t.Errorf("want Cache-Control no-store, got %q", cacheControl)
-	}
-	if body := w.Body.String(); body != "MP3DATA" {
-		t.Errorf("want MP3DATA body, got %q", body)
+		t.Errorf("不存在曲目应 404，得到 %d", w.Code)
 	}
 }
