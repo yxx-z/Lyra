@@ -93,3 +93,34 @@ func TestOpen_LyricsHasSyncCheckedColumn(t *testing.T) {
 		t.Fatal("lyrics 表应有 sync_checked 列")
 	}
 }
+
+func TestOpen_HasUsersAndSessions(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer db.Close()
+	for _, table := range []string{"users", "sessions"} {
+		var n int
+		if err := db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&n); err != nil || n != 1 {
+			t.Errorf("表 %s 应存在 (n=%d err=%v)", table, n, err)
+		}
+	}
+}
+
+func TestOpen_BookmarksAndQueueHaveUserID(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`INSERT INTO tracks(id,title,file_path) VALUES('t1','x','p1')`); err != nil {
+		t.Fatalf("seed track: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO bookmarks(user_id,track_id,position) VALUES(NULL,'t1',1000)`); err != nil {
+		t.Errorf("bookmarks 应有可空 user_id 列: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO play_queue(user_id,track_ids) VALUES(NULL,'t1')`); err != nil {
+		t.Errorf("play_queue 应有可空 user_id 列: %v", err)
+	}
+}

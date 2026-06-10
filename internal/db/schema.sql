@@ -74,21 +74,41 @@ CREATE TABLE playlist_tracks (
 CREATE UNIQUE INDEX idx_playlist_tracks_pos ON playlist_tracks(playlist_id, position);
 
 CREATE TABLE bookmarks (
-    track_id   TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+    user_id    TEXT REFERENCES users(id) ON DELETE CASCADE,
+    track_id   TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
     position   INTEGER NOT NULL,
     comment    TEXT NOT NULL DEFAULT '',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, track_id)
 );
 
 CREATE TABLE play_queue (
-    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    user_id    TEXT UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     track_ids  TEXT NOT NULL DEFAULT '',
     current    TEXT NOT NULL DEFAULT '',
     position   INTEGER NOT NULL DEFAULT 0,
     changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     changed_by TEXT NOT NULL DEFAULT ''
 );
+
+CREATE TABLE users (
+    id            TEXT PRIMARY KEY,
+    username      TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    subsonic_pw   BLOB,
+    is_admin      INTEGER NOT NULL DEFAULT 0,
+    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE sessions (
+    token      TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL
+);
+CREATE INDEX idx_sessions_user ON sessions(user_id);
 
 CREATE INDEX idx_tracks_album         ON tracks(album_id);
 CREATE INDEX idx_tracks_artist        ON tracks(artist_id);
