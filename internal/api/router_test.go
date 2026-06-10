@@ -61,10 +61,9 @@ func TestProtectedRoute_RequiresBearerToken(t *testing.T) {
 	}
 }
 
-func TestProtectedRoute_AcceptsBearerToken(t *testing.T) {
-	r := newTestRouterWithAuth(t, config.AuthConfig{Token: "secret"})
+func TestProtectedRoute_AllowsAccessWhenAuthDisabled(t *testing.T) {
+	r := newTestRouterWithAuth(t, config.AuthConfig{Disable: true})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/albums", nil)
-	req.Header.Set("Authorization", "Bearer secret")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 

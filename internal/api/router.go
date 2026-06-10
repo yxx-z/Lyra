@@ -7,9 +7,11 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/yxx-z/lyra/internal/auth"
 	"github.com/yxx-z/lyra/internal/api/middleware"
 	"github.com/yxx-z/lyra/internal/api/subsonic"
 	v1 "github.com/yxx-z/lyra/internal/api/v1"
@@ -33,16 +35,31 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 	tsvc := transcode.NewService(cfg.Transcode.FFmpegPath, cfg.Transcode.DefaultBitrate, tcache)
 	streamH := v1.NewStreamHandler(db, tsvc)
 
+	keyPath := filepath.Join(filepath.Dir(cfg.Database.Path), "secret.key")
+	key, err := auth.LoadOrCreateKey(keyPath)
+	if err != nil {
+		panic("加载主密钥失败: " + err.Error())
+	}
+	users := auth.NewUserStore(db)
+	sessions := auth.NewSessionStore(db)
+
 	r.Get("/health", handleHealth)
 
-	authH := v1.NewAuthHandler(cfg)
+	authH := v1.NewAuthHandler(users, sessions)
+	setupH := v1.NewSetupHandler(users, sessions, db)
+	accountH := v1.NewAccountHandler(users, key)
 	r.Post("/api/v1/auth/login", authH.Login)
 	r.Post("/api/v1/auth/logout", authH.Logout)
+	r.Get("/api/v1/setup/status", setupH.Status)
+	r.Post("/api/v1/setup", setupH.Create)
 
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Use(middleware.BearerAuth(cfg.Auth.Token, cfg.Auth.Disable))
+		r.Use(middleware.SessionAuth(sessions, users, cfg.Auth.Disable))
 
+		r.Get("/auth/me", authH.Me)
 		r.Post("/auth/session", authH.Session)
+		r.Post("/account/password", accountH.ChangePassword)
+		r.Post("/account/subsonic-password", accountH.SetSubsonicPassword)
 
 		lib := v1.NewLibraryHandler(s)
 		r.Post("/library/scan", lib.TriggerScan)
@@ -89,7 +106,7 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 	})
 
 	subCover := v1.NewCoverHandler(db)
-	subHandler := subsonic.NewHandler(db, cfg, streamH, subCover)
+	subHandler := subsonic.NewHandler(db, cfg, streamH, subCover, users, key)
 	r.Route("/rest", subHandler.RegisterRoutes)
 
 	// 所有非 API 路由返回嵌入的前端文件
