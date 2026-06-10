@@ -17,7 +17,9 @@ func fakeFFmpeg(t *testing.T, body string, sleepSec int) string {
 	p := filepath.Join(t.TempDir(), "ffmpeg")
 	script := "#!/bin/sh\n"
 	if sleepSec > 0 {
-		script += "sleep " + strconv.Itoa(sleepSec) + "\n"
+		// exec 让 sleep 取代 shell（同 PID），ctx 取消时 SIGKILL 直接命中它 → 立即结束，
+		// 真正验证"客户端断开即终止"，并避免孤儿 sleep 持有管道拖慢测试。
+		script += "exec sleep " + strconv.Itoa(sleepSec) + "\n"
 	}
 	script += `out=""
 for a in "$@"; do out="$a"; done

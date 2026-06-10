@@ -175,6 +175,8 @@ func (s *Service) runPipe(w http.ResponseWriter, r *http.Request, srcPath string
 	var copyErr error
 	if rerr == nil {
 		_, copyErr = io.Copy(dst, stdout)
+	} else if rerr != io.EOF {
+		copyErr = rerr
 	}
 	waitErr := cmd.Wait()
 	if copyErr != nil || waitErr != nil {
