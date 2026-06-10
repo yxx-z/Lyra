@@ -51,6 +51,7 @@ func (h *Handler) getBookmarks(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, 0, "查询失败")
 		return
 	}
+	defer rows.Close()
 	type bmRow struct {
 		trackID, comment, created, changed string
 		position                           int64
@@ -69,7 +70,7 @@ func (h *Handler) getBookmarks(w http.ResponseWriter, r *http.Request) {
 	}
 	rows.Close()
 
-	bms := &Bookmarks{}
+	bms := &Bookmarks{Bookmark: []Bookmark{}}
 	for _, bm := range raw {
 		child, ok := h.childByID(bm.trackID)
 		if !ok {

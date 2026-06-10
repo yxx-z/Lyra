@@ -77,3 +77,12 @@ func TestPlayQueue_Empty(t *testing.T) {
 		t.Errorf("清空后不应再含曲目: %s", w.Body.String())
 	}
 }
+
+func TestGetBookmarks_EmptyIsArray(t *testing.T) {
+	h, _ := testHandler(t)
+	seed(t, h.db)
+	w := doReq(t, h, "/rest/getBookmarks?u=admin&p=secret&f=json")
+	if strings.Contains(w.Body.String(), `"bookmark":null`) {
+		t.Errorf("空书签应为 []，不应为 null: %s", w.Body.String())
+	}
+}
