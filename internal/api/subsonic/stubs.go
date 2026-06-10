@@ -13,4 +13,3 @@ func (h *Handler) getGenres(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) getStarred2(w http.ResponseWriter, r *http.Request) {
 	writeResponse(w, r, &Response{Starred2: &Starred2{}})
 }
-

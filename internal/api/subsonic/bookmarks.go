@@ -63,6 +63,10 @@ func (h *Handler) getBookmarks(w http.ResponseWriter, r *http.Request) {
 		}
 		raw = append(raw, bm)
 	}
+	if err := rows.Err(); err != nil {
+		writeError(w, r, 0, "查询失败")
+		return
+	}
 	rows.Close()
 
 	bms := &Bookmarks{}
@@ -89,7 +93,12 @@ func (h *Handler) deleteBookmark(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) savePlayQueue(w http.ResponseWriter, r *http.Request) {
-	trackIDs := strings.Join(r.Form["id"], ",")
+	ids := r.Form["id"]
+	const maxQueue = 1000 // 上限，防止异常超长队列
+	if len(ids) > maxQueue {
+		ids = ids[:maxQueue]
+	}
+	trackIDs := strings.Join(ids, ",")
 	current := r.Form.Get("current")
 	position, _ := strconv.ParseInt(r.Form.Get("position"), 10, 64)
 	changedBy := r.Form.Get("c")
