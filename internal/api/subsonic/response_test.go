@@ -98,3 +98,33 @@ func TestResponse_AlbumListXMLArray(t *testing.T) {
 		t.Errorf("应有 2 个 <album> 元素: %s", out)
 	}
 }
+
+func TestBookmarkDTO_XMLJSON(t *testing.T) {
+	resp := &Response{Bookmarks: &Bookmarks{Bookmark: []Bookmark{
+		{Position: 42000, Username: "admin", Comment: "hi", Created: "2026-06-10 00:00:00", Changed: "2026-06-10 00:01:00", Entry: Child{ID: "t1", Title: "X"}},
+	}}}
+	out, _ := xml.Marshal(resp)
+	if !strings.Contains(string(out), `<bookmark position="42000"`) || !strings.Contains(string(out), `<entry id="t1"`) {
+		t.Errorf("书签 XML 不符: %s", out)
+	}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/x?f=json", nil)
+	writeResponse(w, r, resp)
+	b := w.Body.String()
+	if !strings.Contains(b, `"position":42000`) || !strings.Contains(b, `"username":"admin"`) || !strings.Contains(b, `"comment":"hi"`) {
+		t.Errorf("书签 JSON 不符: %s", b)
+	}
+}
+
+func TestPlayQueueDTO_Order(t *testing.T) {
+	resp := &Response{PlayQueue: &PlayQueue{
+		Current: "t2", Position: 5000, Username: "admin", Changed: "2026-06-10 00:00:00", ChangedBy: "Symfonium",
+		Entry: []Child{{ID: "t1", Title: "A"}, {ID: "t2", Title: "B"}},
+	}}
+	out, _ := xml.Marshal(resp)
+	s := string(out)
+	if !strings.Contains(s, `<playQueue current="t2"`) || strings.Index(s, `id="t1"`) > strings.Index(s, `id="t2"`) {
+		t.Errorf("播放队列 XML 顺序/属性不符: %s", s)
+	}
+}
