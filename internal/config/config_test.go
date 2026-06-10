@@ -64,4 +64,7 @@ func TestDefault_FfprobeAndTranscodeDir(t *testing.T) {
 	if cfg.Cache.TranscodeDir != "./data/transcode" {
 		t.Errorf("want ./data/transcode, got %q", cfg.Cache.TranscodeDir)
 	}
+	if cfg.Cache.TranscodeMaxSizeMB != 2048 {
+		t.Errorf("want TranscodeMaxSizeMB=2048, got %d", cfg.Cache.TranscodeMaxSizeMB)
+	}
 }

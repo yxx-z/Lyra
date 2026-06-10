@@ -99,7 +99,7 @@ func Default() *Config {
 		Auth:     AuthConfig{Disable: false, Username: "admin"},
 		Library:  LibraryConfig{ScanInterval: 3600, Watch: true},
 		Database: DatabaseConfig{Path: "./data/music.db"},
-		Cache:    CacheConfig{ArtworkDir: "./data/artwork", ArtworkMaxSizeMB: 2048, TranscodeDir: "./data/transcode"},
+		Cache:    CacheConfig{ArtworkDir: "./data/artwork", ArtworkMaxSizeMB: 2048, TranscodeDir: "./data/transcode", TranscodeMaxSizeMB: 2048},
 		Scraper:  ScraperConfig{Enabled: true, Netease: NeteaseConfig{Enabled: true}, AcoustID: AcoustIDConfig{FpcalcPath: "fpcalc"}},
 		Transcode: TranscodeConfig{
 			FFmpegPath:     "ffmpeg",
