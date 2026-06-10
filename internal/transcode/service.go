@@ -31,8 +31,9 @@ func NewService(ffmpegPath string, defaultBitrate int, cache *Cache) *Service {
 }
 
 // Serve 处理一个流请求：直传 / 命中缓存 / 管道转码+写缓存 / seek 回退。
-func (s *Service) Serve(w http.ResponseWriter, r *http.Request, src Source) {
-	dec := Plan(src, parseParams(r), s.defaultBitrate)
+// p 由调用方解析（见 ParseParams），便于不同端点注入各自的默认策略。
+func (s *Service) Serve(w http.ResponseWriter, r *http.Request, src Source, p Params) {
+	dec := Plan(src, p, s.defaultBitrate)
 
 	if dec.Passthrough {
 		w.Header().Set("Content-Type", dec.ContentType)
@@ -82,8 +83,8 @@ func (s *Service) Serve(w http.ResponseWriter, r *http.Request, src Source) {
 	}
 }
 
-// parseParams 从请求读取 format / maxBitRate（GET query 与 POST 表单皆可）。
-func parseParams(r *http.Request) Params {
+// ParseParams 从请求读取 format / maxBitRate（GET query 与 POST 表单皆可）。
+func ParseParams(r *http.Request) Params {
 	_ = r.ParseForm()
 	br, _ := strconv.Atoi(r.Form.Get("maxBitRate"))
 	return Params{Format: r.Form.Get("format"), MaxBitRate: br}

@@ -45,7 +45,7 @@ func TestServe_Passthrough(t *testing.T) {
 	src := newSource(t, "mp3", "ORIGINALMP3")
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/stream", nil) // 无参数 → 直传
-	svc.Serve(w, r, src)
+	svc.Serve(w, r, src, ParseParams(r))
 	if w.Code != 200 || w.Body.String() != "ORIGINALMP3" {
 		t.Errorf("直传应原样返回文件: %d %q", w.Code, w.Body.String())
 	}
@@ -61,7 +61,7 @@ func TestServe_PipeAndCache(t *testing.T) {
 	// 指定 format=opus 触发转码
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/stream?format=opus", nil)
-	svc.Serve(w, r, src)
+	svc.Serve(w, r, src, ParseParams(r))
 	if w.Body.String() != "TRANSCODED" {
 		t.Errorf("管道应输出转码字节: %q", w.Body.String())
 	}
@@ -73,7 +73,7 @@ func TestServe_PipeAndCache(t *testing.T) {
 	// 再次请求命中缓存
 	w2 := httptest.NewRecorder()
 	r2 := httptest.NewRequest("GET", "/stream?format=opus", nil)
-	svc.Serve(w2, r2, src)
+	svc.Serve(w2, r2, src, ParseParams(r2))
 	if w2.Body.String() != "TRANSCODED" {
 		t.Errorf("命中缓存应返回缓存内容: %q", w2.Body.String())
 	}
@@ -87,7 +87,7 @@ func TestServe_ClientCancel(t *testing.T) {
 	r := httptest.NewRequest("GET", "/stream?format=opus", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 	go func() { time.Sleep(200 * time.Millisecond); cancel() }()
-	svc.Serve(w, r, src) // 应在 ffmpeg 被取消后返回
+	svc.Serve(w, r, src, ParseParams(r)) // 应在 ffmpeg 被取消后返回
 	// 取消后不应留下被提升的缓存文件
 	if _, err := os.Stat(cache.Path("t1", "opus", 192)); err == nil {
 		t.Errorf("取消后不应提升缓存")
