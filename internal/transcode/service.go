@@ -199,5 +199,9 @@ func (s *Service) transcodeToFile(ctx context.Context, srcPath, dst string, dec 
 		_ = os.Remove(tmp)
 		return err
 	}
-	return os.Rename(tmp, dst)
+	if err := os.Rename(tmp, dst); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
 }
