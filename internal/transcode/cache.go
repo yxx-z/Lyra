@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -17,6 +18,7 @@ type Cache struct {
 	// inflight：cache key → 锁。规模受 (trackID,codec,bitrate) 组合数约束（≈ 库规模），
 	// 不随请求数增长，条目不回收，在此规模可接受。
 	inflight map[string]*sync.Mutex
+	evictMu  sync.Mutex // 保证同一时刻仅有一个 evict 运行
 }
 
 // NewCache 创建根于 dir 的缓存；maxSizeMB ≤0 表示不限容量。
@@ -62,6 +64,8 @@ func (c *Cache) evict(keep string) {
 	if c.maxBytes <= 0 {
 		return
 	}
+	c.evictMu.Lock()
+	defer c.evictMu.Unlock()
 	entries, err := os.ReadDir(c.dir)
 	if err != nil {
 		return
@@ -75,6 +79,9 @@ func (c *Cache) evict(keep string) {
 	var total int64
 	for _, e := range entries {
 		if e.IsDir() {
+			continue
+		}
+		if strings.HasSuffix(e.Name(), ".tmp") {
 			continue
 		}
 		info, err := e.Info()

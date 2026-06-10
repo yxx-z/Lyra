@@ -63,3 +63,19 @@ func TestCacheEvict_Unlimited(t *testing.T) {
 		t.Errorf("不限容量时不应删除")
 	}
 }
+
+func TestCacheEvict_SkipsTmp(t *testing.T) {
+	dir := t.TempDir()
+	// 一个 2MB 的 .tmp（正在转码）+ 一个 2MB 正式文件，上限 1MB
+	for _, name := range []string{"x.mp3.tmp", "y.mp3"} {
+		if err := os.WriteFile(filepath.Join(dir, name), make([]byte, 2*1024*1024), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c := NewCache(dir, 1)
+	c.evict("")
+	// .tmp 不应被删除（即便超限）
+	if _, err := os.Stat(filepath.Join(dir, "x.mp3.tmp")); err != nil {
+		t.Errorf(".tmp 文件不应被 evict 删除")
+	}
+}
