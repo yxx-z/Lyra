@@ -153,6 +153,41 @@ export class ApiClient {
     return data.token
   }
 
+  getSetupStatus(): Promise<{ needsSetup: boolean }> {
+    return this.request<{ needsSetup: boolean }>('/api/v1/setup/status', { auth: false })
+  }
+
+  async setup(username: string, password: string): Promise<string> {
+    const data = await this.request<{ token: string }>('/api/v1/setup', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+      headers: { 'Content-Type': 'application/json' },
+      auth: false,
+    })
+    this.token = data.token
+    return data.token
+  }
+
+  getMe(): Promise<{ username: string; isAdmin: boolean }> {
+    return this.request<{ username: string; isAdmin: boolean }>('/api/v1/auth/me')
+  }
+
+  changePassword(oldPassword: string, newPassword: string): Promise<void> {
+    return this.request<void>('/api/v1/account/password', {
+      method: 'POST',
+      body: JSON.stringify({ oldPassword, newPassword }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  setSubsonicPassword(password: string): Promise<void> {
+    return this.request<void>('/api/v1/account/subsonic-password', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
   async logout() {
     await this.request<{ ok: boolean }>('/api/v1/auth/logout', {
       method: 'POST',

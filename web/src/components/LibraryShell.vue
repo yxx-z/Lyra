@@ -21,8 +21,19 @@
         </nav>
       </div>
 
-      <!-- 登出按钮归纳至侧边栏底部 -->
+      <!-- 账户设置与登出按钮归纳至侧边栏底部 -->
       <div class="logout-nav-container">
+        <button
+          class="logout-nav-button"
+          title="账户设置"
+          type="button"
+          @click="$emit('open-settings')"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="8" r="4" />
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+          </svg>
+        </button>
         <button
           class="logout-nav-button"
           title="退出登录"
@@ -92,6 +103,7 @@ const emit = defineEmits<{
   'change-mode': [mode: ViewMode]
   refresh: []
   logout: []
+  'open-settings': []
   search: [query: string]
 }>()
 

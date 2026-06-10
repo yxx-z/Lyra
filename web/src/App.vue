@@ -1,8 +1,16 @@
 <template>
   <div>
+    <!-- 0. 首次启动引导页 -->
+    <SetupView
+      v-if="needsSetup"
+      :loading="setupLoading"
+      :error="setupError"
+      @setup="handleSetup"
+    />
+
     <!-- 1. 登录模式 -->
     <LoginView
-      v-if="showLogin"
+      v-else-if="showLogin"
       :loading="loginLoading"
       :error="loginError"
       @login="handleLogin"
@@ -15,6 +23,7 @@
       @change-mode="changeMode"
       @refresh="refreshCurrentView"
       @logout="void logout()"
+      @open-settings="showSettings = true"
       @search="runSearch"
     >
       <!-- 高品质手写浮动 Alert 提示栏 -->
@@ -35,9 +44,16 @@
         </button>
       </div>
 
+      <!-- 账户设置面板 -->
+      <AccountSettings
+        v-if="showSettings"
+        :api="api"
+        @close="showSettings = false"
+      />
+
       <!-- 搜索展示面板 (最高优先级覆盖主面板) -->
       <SearchPanel
-        v-if="searchQuery"
+        v-if="!showSettings && searchQuery"
         :query="searchQuery"
         :results="searchResults"
         :loading="searchLoading"
@@ -119,15 +135,17 @@ import type {
   TrackSummary,
   ViewMode,
 } from './api/client'
+import AccountSettings from './components/AccountSettings.vue'
 import AlbumDetail from './components/AlbumDetail.vue'
 import AlbumGrid from './components/AlbumGrid.vue'
 import ArtistBrowser from './components/ArtistBrowser.vue'
 import LibraryShell from './components/LibraryShell.vue'
 import LoginView from './components/LoginView.vue'
+import LyricsPanel from './components/LyricsPanel.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import ScanPanel from './components/ScanPanel.vue'
 import SearchPanel from './components/SearchPanel.vue'
-import LyricsPanel from './components/LyricsPanel.vue'
+import SetupView from './components/SetupView.vue'
 
 // 引入全局音频 Store
 const playerStore = usePlayerStore()
@@ -139,6 +157,14 @@ const mode = ref<ViewMode>('albums')
 const loginLoading = ref(false)
 const loginError = ref('')
 const globalError = ref('')
+
+// 首次启动引导状态
+const needsSetup = ref(false)
+const setupLoading = ref(false)
+const setupError = ref('')
+
+// 账户设置面板开关
+const showSettings = ref(false)
 
 // 沉浸式全屏歌词是否开启状态
 const isLyricsOpen = ref(false)
@@ -195,6 +221,17 @@ onUnmounted(() => {
 })
 
 async function boot() {
+  // 首先检查是否需要首次初始化
+  try {
+    const status = await api.getSetupStatus()
+    if (status.needsSetup) {
+      needsSetup.value = true
+      return
+    }
+  } catch {
+    // 查询失败则按已初始化处理，继续原逻辑
+  }
+
   if (token.value) {
     try {
       await api.refreshSession()
@@ -230,6 +267,22 @@ async function handleLogin(payload: { username: string; password: string }) {
     loginError.value = messageFromError(error)
   } finally {
     loginLoading.value = false
+  }
+}
+
+async function handleSetup(payload: { username: string; password: string }) {
+  setupLoading.value = true
+  setupError.value = ''
+  try {
+    const nextToken = await api.setup(payload.username, payload.password)
+    tokenStorage.save(nextToken)
+    token.value = nextToken
+    needsSetup.value = false
+    await loadInitialData()
+  } catch (error) {
+    setupError.value = messageFromError(error)
+  } finally {
+    setupLoading.value = false
   }
 }
 
@@ -441,6 +494,7 @@ async function logout() {
   selectedAlbum.value = null
   selectedArtist.value = null
   isLyricsOpen.value = false // 登出时自动收折歌词面板
+  showSettings.value = false // 登出时关闭账户设置面板
   playerStore.$reset() // 清空全局播放状态
 }
 
