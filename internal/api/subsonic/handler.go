@@ -54,6 +54,10 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	h.reg(r, "getGenres", h.getGenres)
 	h.reg(r, "getStarred2", h.getStarred2)
 	h.reg(r, "getBookmarks", h.getBookmarks)
+	h.reg(r, "createBookmark", h.createBookmark)
+	h.reg(r, "deleteBookmark", h.deleteBookmark)
+	h.reg(r, "savePlayQueue", h.savePlayQueue)
+	h.reg(r, "getPlayQueue", h.getPlayQueue)
 
 	// 兜底：任何未实现的 /rest 端点返回可解析的 Subsonic 错误封套，
 	// 而非 chi 默认的纯文本 404（后者会让 Subsonic 客户端 JSON 解析失败）。

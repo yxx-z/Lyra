@@ -14,6 +14,3 @@ func (h *Handler) getStarred2(w http.ResponseWriter, r *http.Request) {
 	writeResponse(w, r, &Response{Starred2: &Starred2{}})
 }
 
-func (h *Handler) getBookmarks(w http.ResponseWriter, r *http.Request) {
-	writeResponse(w, r, &Response{Bookmarks: &Bookmarks{}})
-}
