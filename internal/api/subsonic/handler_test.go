@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	v1 "github.com/yxx-z/lyra/internal/api/v1"
+	"github.com/yxx-z/lyra/internal/auth"
 	"github.com/yxx-z/lyra/internal/config"
 	"github.com/yxx-z/lyra/internal/db"
 	"github.com/yxx-z/lyra/internal/transcode"
@@ -20,14 +21,20 @@ func testHandler(t *testing.T) (*Handler, *config.Config) {
 	}
 	t.Cleanup(func() { d.Close() })
 	cfg := &config.Config{}
-	cfg.Auth.Username = "admin"
-	cfg.Subsonic.Password = "secret"
 	cfg.Subsonic.Enabled = true
+
+	key := make([]byte, 32)
+	users := auth.NewUserStore(d)
+	hash, _ := auth.HashPassword("loginpw")
+	u, _ := users.Create("admin", hash, true)
+	enc, _ := auth.Encrypt(key, "secret")
+	users.UpdateSubsonicPW(u.ID, enc)
+
 	tcache := transcode.NewCache(t.TempDir(), 0)
 	tsvc := transcode.NewService(cfg.Transcode.FFmpegPath, cfg.Transcode.DefaultBitrate, tcache)
 	stream := v1.NewStreamHandler(d, tsvc)
 	cover := v1.NewCoverHandler(d)
-	return NewHandler(d, cfg, stream, cover), cfg
+	return NewHandler(d, cfg, stream, cover, users, key), cfg
 }
 
 // doReq 走完整 chi 路由（含认证中间件）。

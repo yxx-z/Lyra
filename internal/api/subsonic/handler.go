@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	v1 "github.com/yxx-z/lyra/internal/api/v1"
+	"github.com/yxx-z/lyra/internal/auth"
 	"github.com/yxx-z/lyra/internal/config"
 )
 
@@ -15,11 +16,13 @@ type Handler struct {
 	cfg     *config.Config
 	streamH *v1.StreamHandler // 字段名 streamH 以避开端点方法 stream 的命名冲突
 	cover   *v1.CoverHandler
+	users   *auth.UserStore
+	key     []byte
 }
 
 // NewHandler 创建 Subsonic handler，复用 v1 的 stream/cover。
-func NewHandler(db *sql.DB, cfg *config.Config, stream *v1.StreamHandler, cover *v1.CoverHandler) *Handler {
-	return &Handler{db: db, cfg: cfg, streamH: stream, cover: cover}
+func NewHandler(db *sql.DB, cfg *config.Config, stream *v1.StreamHandler, cover *v1.CoverHandler, users *auth.UserStore, key []byte) *Handler {
+	return &Handler{db: db, cfg: cfg, streamH: stream, cover: cover, users: users, key: key}
 }
 
 // reg 在 /rest 子路由上注册某端点的 /name 与 /name.view（GET+POST），套认证。
@@ -66,15 +69,16 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	})
 }
 
-// withAuth 在调用真正 handler 前校验 Subsonic 认证。
+// withAuth 在调用真正 handler 前校验 Subsonic 认证，并将用户注入 context。
 func (h *Handler) withAuth(fn http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
-		if e := authenticate(r.Form, h.cfg); e != nil {
+		u, e := h.authenticate(r.Form)
+		if e != nil {
 			writeError(w, r, e.Code, e.Message)
 			return
 		}
-		fn(w, r)
+		fn(w, r.WithContext(withUser(r.Context(), u)))
 	}
 }
 

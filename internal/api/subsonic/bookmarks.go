@@ -25,6 +25,7 @@ func (h *Handler) childByID(trackID string) (Child, bool) {
 }
 
 func (h *Handler) createBookmark(w http.ResponseWriter, r *http.Request) {
+	u := userFromCtx(r.Context())
 	id := r.Form.Get("id")
 	position, _ := strconv.ParseInt(r.Form.Get("position"), 10, 64)
 	comment := r.Form.Get("comment")
@@ -35,10 +36,10 @@ func (h *Handler) createBookmark(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := h.db.Exec(`
-		INSERT INTO bookmarks(track_id, position, comment) VALUES(?,?,?)
-		ON CONFLICT(track_id) DO UPDATE SET
+		INSERT INTO bookmarks(user_id, track_id, position, comment) VALUES(?,?,?,?)
+		ON CONFLICT(user_id, track_id) DO UPDATE SET
 			position=excluded.position, comment=excluded.comment, updated_at=datetime('now')`,
-		id, position, comment); err != nil {
+		u.ID, id, position, comment); err != nil {
 		writeError(w, r, 0, "保存书签失败")
 		return
 	}
@@ -46,7 +47,8 @@ func (h *Handler) createBookmark(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getBookmarks(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.db.Query(`SELECT track_id, position, comment, created_at, updated_at FROM bookmarks ORDER BY updated_at DESC`)
+	u := userFromCtx(r.Context())
+	rows, err := h.db.Query(`SELECT track_id, position, comment, created_at, updated_at FROM bookmarks WHERE user_id=? ORDER BY updated_at DESC`, u.ID)
 	if err != nil {
 		writeError(w, r, 0, "查询失败")
 		return
@@ -78,7 +80,7 @@ func (h *Handler) getBookmarks(w http.ResponseWriter, r *http.Request) {
 		}
 		bms.Bookmark = append(bms.Bookmark, Bookmark{
 			Position: bm.position,
-			Username: h.cfg.Auth.Username,
+			Username: u.Username,
 			Comment:  bm.comment,
 			Created:  bm.created,
 			Changed:  bm.changed,
@@ -89,13 +91,15 @@ func (h *Handler) getBookmarks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) deleteBookmark(w http.ResponseWriter, r *http.Request) {
-	_, _ = h.db.Exec(`DELETE FROM bookmarks WHERE track_id=?`, r.Form.Get("id"))
+	u := userFromCtx(r.Context())
+	_, _ = h.db.Exec(`DELETE FROM bookmarks WHERE user_id=? AND track_id=?`, u.ID, r.Form.Get("id"))
 	writeResponse(w, r, &Response{})
 }
 
 func (h *Handler) savePlayQueue(w http.ResponseWriter, r *http.Request) {
+	u := userFromCtx(r.Context())
 	ids := r.Form["id"]
-	const maxQueue = 1000 // 上限，防止异常超长队列
+	const maxQueue = 1000
 	if len(ids) > maxQueue {
 		ids = ids[:maxQueue]
 	}
@@ -104,12 +108,12 @@ func (h *Handler) savePlayQueue(w http.ResponseWriter, r *http.Request) {
 	position, _ := strconv.ParseInt(r.Form.Get("position"), 10, 64)
 	changedBy := r.Form.Get("c")
 	if _, err := h.db.Exec(`
-		INSERT INTO play_queue(id, track_ids, current, position, changed_at, changed_by)
-		VALUES(1, ?, ?, ?, datetime('now'), ?)
-		ON CONFLICT(id) DO UPDATE SET
+		INSERT INTO play_queue(user_id, track_ids, current, position, changed_at, changed_by)
+		VALUES(?, ?, ?, ?, datetime('now'), ?)
+		ON CONFLICT(user_id) DO UPDATE SET
 			track_ids=excluded.track_ids, current=excluded.current,
 			position=excluded.position, changed_at=datetime('now'), changed_by=excluded.changed_by`,
-		trackIDs, current, position, changedBy); err != nil {
+		u.ID, trackIDs, current, position, changedBy); err != nil {
 		writeError(w, r, 0, "保存播放队列失败")
 		return
 	}
@@ -117,9 +121,10 @@ func (h *Handler) savePlayQueue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getPlayQueue(w http.ResponseWriter, r *http.Request) {
+	u := userFromCtx(r.Context())
 	var trackIDs, current, changed, changedBy string
 	var position int64
-	err := h.db.QueryRow(`SELECT track_ids, current, position, changed_at, changed_by FROM play_queue WHERE id=1`).
+	err := h.db.QueryRow(`SELECT track_ids, current, position, changed_at, changed_by FROM play_queue WHERE user_id=?`, u.ID).
 		Scan(&trackIDs, &current, &position, &changed, &changedBy)
 	if err != nil {
 		writeResponse(w, r, &Response{})
@@ -128,7 +133,7 @@ func (h *Handler) getPlayQueue(w http.ResponseWriter, r *http.Request) {
 	pq := &PlayQueue{
 		Current:   current,
 		Position:  position,
-		Username:  h.cfg.Auth.Username,
+		Username:  u.Username,
 		Changed:   changed,
 		ChangedBy: changedBy,
 	}
