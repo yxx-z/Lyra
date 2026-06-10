@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/yxx-z/lyra/internal/auth"
 )
 
@@ -58,16 +59,34 @@ func (h *SetupHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "密码处理失败")
 		return
 	}
-	u, err := h.users.Create(req.Username, hash, true)
+	// 建管理员与认领孤儿数据放在同一事务，避免中途崩溃导致孤儿行永久无主。
+	userID := uuid.NewString()
+	tx, err := h.db.Begin()
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "创建用户失败")
 		return
 	}
-	// 认领迁移产生的孤儿数据（旧全局书签/队列）
-	_, _ = h.db.Exec(`UPDATE bookmarks SET user_id=? WHERE user_id IS NULL`, u.ID)
-	_, _ = h.db.Exec(`UPDATE play_queue SET user_id=? WHERE user_id IS NULL`, u.ID)
+	if _, err := tx.Exec(`INSERT INTO users(id, username, password_hash, is_admin) VALUES(?,?,?,1)`, userID, req.Username, hash); err != nil {
+		tx.Rollback()
+		writeJSONError(w, http.StatusInternalServerError, "创建用户失败")
+		return
+	}
+	if _, err := tx.Exec(`UPDATE bookmarks SET user_id=? WHERE user_id IS NULL`, userID); err != nil {
+		tx.Rollback()
+		writeJSONError(w, http.StatusInternalServerError, "认领数据失败")
+		return
+	}
+	if _, err := tx.Exec(`UPDATE play_queue SET user_id=? WHERE user_id IS NULL`, userID); err != nil {
+		tx.Rollback()
+		writeJSONError(w, http.StatusInternalServerError, "认领数据失败")
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "创建用户失败")
+		return
+	}
 
-	token, err := h.sessions.Create(u.ID, sessionTTL)
+	token, err := h.sessions.Create(userID, sessionTTL)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "创建会话失败")
 		return

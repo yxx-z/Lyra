@@ -11,10 +11,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/yxx-z/lyra/internal/auth"
 	"github.com/yxx-z/lyra/internal/api/middleware"
 	"github.com/yxx-z/lyra/internal/api/subsonic"
 	v1 "github.com/yxx-z/lyra/internal/api/v1"
+	"github.com/yxx-z/lyra/internal/auth"
 	"github.com/yxx-z/lyra/internal/config"
 	lyricspkg "github.com/yxx-z/lyra/internal/lyrics"
 	metadatapkg "github.com/yxx-z/lyra/internal/metadata"

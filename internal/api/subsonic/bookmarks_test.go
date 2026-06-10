@@ -3,6 +3,8 @@ package subsonic
 import (
 	"strings"
 	"testing"
+
+	"github.com/yxx-z/lyra/internal/auth"
 )
 
 func TestBookmarks_CreateGetDelete(t *testing.T) {
@@ -84,5 +86,34 @@ func TestGetBookmarks_EmptyIsArray(t *testing.T) {
 	w := doReq(t, h, "/rest/getBookmarks?u=admin&p=secret&f=json")
 	if strings.Contains(w.Body.String(), `"bookmark":null`) {
 		t.Errorf("空书签应为 []，不应为 null: %s", w.Body.String())
+	}
+}
+
+// TestBookmarks_PerUserIsolation 确认用户 A 的书签不出现在用户 B 的 getBookmarks（per-user 隔离）。
+func TestBookmarks_PerUserIsolation(t *testing.T) {
+	h, _ := testHandler(t)
+	seed(t, h.db)
+	// 造第二个用户 bob，独立的 Subsonic 密码 bobpw
+	hash, _ := auth.HashPassword("loginpw")
+	bob, err := h.users.Create("bob", hash, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enc, _ := auth.Encrypt(h.key, "bobpw")
+	if err := h.users.UpdateSubsonicPW(bob.ID, enc); err != nil {
+		t.Fatal(err)
+	}
+
+	// admin 建一个书签
+	doReq(t, h, "/rest/createBookmark?u=admin&p=secret&id=t1&position=1000&f=json")
+	// bob 不应看到 admin 的书签
+	w := doReq(t, h, "/rest/getBookmarks?u=bob&p=bobpw&f=json")
+	if strings.Contains(w.Body.String(), "以父之名") {
+		t.Errorf("bob 不应看到 admin 的书签: %s", w.Body.String())
+	}
+	// admin 仍应看到自己的书签
+	w = doReq(t, h, "/rest/getBookmarks?u=admin&p=secret&f=json")
+	if !strings.Contains(w.Body.String(), "以父之名") {
+		t.Errorf("admin 应看到自己的书签: %s", w.Body.String())
 	}
 }
