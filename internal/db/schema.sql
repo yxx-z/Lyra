@@ -73,6 +73,23 @@ CREATE TABLE playlist_tracks (
 );
 CREATE UNIQUE INDEX idx_playlist_tracks_pos ON playlist_tracks(playlist_id, position);
 
+CREATE TABLE bookmarks (
+    track_id   TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+    position   INTEGER NOT NULL,
+    comment    TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE play_queue (
+    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    track_ids  TEXT NOT NULL DEFAULT '',
+    current    TEXT NOT NULL DEFAULT '',
+    position   INTEGER NOT NULL DEFAULT 0,
+    changed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    changed_by TEXT NOT NULL DEFAULT ''
+);
+
 CREATE INDEX idx_tracks_album         ON tracks(album_id);
 CREATE INDEX idx_tracks_artist        ON tracks(artist_id);
 CREATE INDEX idx_tracks_scrape_status ON tracks(scrape_status);

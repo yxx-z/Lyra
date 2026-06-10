@@ -11,7 +11,7 @@ func TestOpen_CreatesTablesOnFirstRun(t *testing.T) {
 	}
 	defer db.Close()
 
-	tables := []string{"artists", "albums", "tracks", "lyrics", "playlists", "playlist_tracks"}
+	tables := []string{"artists", "albums", "tracks", "lyrics", "playlists", "playlist_tracks", "bookmarks", "play_queue"}
 	for _, table := range tables {
 		var count int
 		err := db.QueryRow(
