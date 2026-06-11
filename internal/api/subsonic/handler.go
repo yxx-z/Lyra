@@ -8,6 +8,7 @@ import (
 	v1 "github.com/yxx-z/lyra/internal/api/v1"
 	"github.com/yxx-z/lyra/internal/auth"
 	"github.com/yxx-z/lyra/internal/config"
+	"github.com/yxx-z/lyra/internal/userdata"
 )
 
 // Handler 实现 Subsonic /rest 端点。
@@ -18,11 +19,12 @@ type Handler struct {
 	cover   *v1.CoverHandler
 	users   *auth.UserStore
 	key     []byte
+	store   *userdata.Store
 }
 
 // NewHandler 创建 Subsonic handler，复用 v1 的 stream/cover。
-func NewHandler(db *sql.DB, cfg *config.Config, stream *v1.StreamHandler, cover *v1.CoverHandler, users *auth.UserStore, key []byte) *Handler {
-	return &Handler{db: db, cfg: cfg, streamH: stream, cover: cover, users: users, key: key}
+func NewHandler(db *sql.DB, cfg *config.Config, stream *v1.StreamHandler, cover *v1.CoverHandler, users *auth.UserStore, key []byte, store *userdata.Store) *Handler {
+	return &Handler{db: db, cfg: cfg, streamH: stream, cover: cover, users: users, key: key, store: store}
 }
 
 // reg 在 /rest 子路由上注册某端点的 /name 与 /name.view（GET+POST），套认证。
@@ -56,6 +58,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	// 客户端启动探测的只读端点（第一期空实现，详见 stubs.go）
 	h.reg(r, "getGenres", h.getGenres)
 	h.reg(r, "getStarred2", h.getStarred2)
+	h.reg(r, "star", h.star)
+	h.reg(r, "unstar", h.unstar)
 	h.reg(r, "getBookmarks", h.getBookmarks)
 	h.reg(r, "createBookmark", h.createBookmark)
 	h.reg(r, "deleteBookmark", h.deleteBookmark)
@@ -95,3 +99,7 @@ func (h *Handler) getMusicFolders(w http.ResponseWriter, r *http.Request) {
 		Folder: []MusicFolder{{ID: 0, Name: "Music"}},
 	}})
 }
+
+// star/unstar 临时桩，后续任务替换为真实实现。
+func (h *Handler) star(w http.ResponseWriter, r *http.Request)   { writeResponse(w, r, &Response{}) }
+func (h *Handler) unstar(w http.ResponseWriter, r *http.Request) { writeResponse(w, r, &Response{}) }

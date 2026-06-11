@@ -105,6 +105,7 @@ type ArtistID3 struct {
 	CoverArt   string     `xml:"coverArt,attr,omitempty" json:"coverArt,omitempty"`
 	AlbumCount int        `xml:"albumCount,attr" json:"albumCount"`
 	Album      []AlbumID3 `xml:"album,omitempty" json:"album,omitempty"`
+	Starred    string     `xml:"starred,attr,omitempty" json:"starred,omitempty"`
 }
 type AlbumID3 struct {
 	ID        string  `xml:"id,attr" json:"id"`
@@ -118,6 +119,7 @@ type AlbumID3 struct {
 	Genre     string  `xml:"genre,attr,omitempty" json:"genre,omitempty"`
 	Created   string  `xml:"created,attr,omitempty" json:"created,omitempty"`
 	Song      []Child `xml:"song,omitempty" json:"song,omitempty"`
+	Starred   string  `xml:"starred,attr,omitempty" json:"starred,omitempty"`
 }
 type AlbumList2 struct {
 	Album []AlbumID3 `xml:"album" json:"album"`
@@ -139,6 +141,7 @@ type Child struct {
 	AlbumID     string `xml:"albumId,attr,omitempty" json:"albumId,omitempty"`
 	ArtistID    string `xml:"artistId,attr,omitempty" json:"artistId,omitempty"`
 	Type        string `xml:"type,attr,omitempty" json:"type,omitempty"`
+	Starred     string `xml:"starred,attr,omitempty" json:"starred,omitempty"`
 }
 type SearchResult3 struct {
 	Artist []ArtistID3 `xml:"artist,omitempty" json:"artist,omitempty"`
