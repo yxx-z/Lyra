@@ -139,3 +139,23 @@ func TestOpen_HasAppSettings(t *testing.T) {
 		t.Errorf("写 app_settings 失败: %v", err)
 	}
 }
+
+func TestOpen_HasFavoritesAndPlayStats(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`INSERT INTO users(id,username,password_hash) VALUES('u1','u1','h')`); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO tracks(id,title,file_path) VALUES('t1','x','p1')`); err != nil {
+		t.Fatalf("seed track: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO starred(user_id,item_type,item_id) VALUES('u1','song','t1')`); err != nil {
+		t.Errorf("starred 表应可写: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO play_stats(user_id,track_id,play_count) VALUES('u1','t1',1)`); err != nil {
+		t.Errorf("play_stats 表应可写: %v", err)
+	}
+}
