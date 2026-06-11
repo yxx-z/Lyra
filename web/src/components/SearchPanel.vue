@@ -39,15 +39,15 @@
       <!-- 1. 单曲模块 -->
       <div v-if="localTracks.length">
         <p class="eyebrow" style="margin-bottom: 12px; font-weight: 700;">TRACKS / 单曲</p>
+        <!-- 使用 div 包装行，避免 button 嵌套（行内含 heart-btn 等交互按钮） -->
         <div style="display: flex; flex-direction: column; gap: 8px;">
-          <button
+          <div
             v-for="track in localTracks"
             :key="track.id"
             class="result-row"
-            type="button"
-            @click="$emit('play-track', track)"
           >
-            <div style="display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1;">
+            <!-- 播放区域 -->
+            <div style="display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; cursor: pointer;" role="button" tabindex="0" @click="$emit('play-track', track)" @keydown.enter="$emit('play-track', track)" @keydown.space.prevent="$emit('play-track', track)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px; color: var(--accent); flex-shrink: 0;">
                 <path d="M9 18V5l12-2v13" />
                 <circle cx="6" cy="18" r="3" />
@@ -60,7 +60,7 @@
             <span class="muted" style="font-size: 13px; margin-left: 16px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px;">
               {{ track.artist }} &middot; {{ track.album }}
             </span>
-            <!-- 曲目红心 -->
+            <!-- 曲目红心 + 添加到歌单 -->
             <button
               class="heart-btn"
               :class="{ starred: track.starred }"
@@ -68,7 +68,8 @@
               :title="track.starred ? '取消收藏' : '收藏'"
               @click.stop="toggleTrackStar(track)"
             >{{ track.starred ? '♥' : '♡' }}</button>
-          </button>
+            <AddToPlaylist :api="api" :track-id="track.id" />
+          </div>
         </div>
       </div>
 
@@ -138,6 +139,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { ApiClient, SearchResponse, TrackResult, AlbumResult } from '../api/client'
+import AddToPlaylist from './AddToPlaylist.vue'
 
 const props = defineProps<{
   query: string

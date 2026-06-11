@@ -63,18 +63,18 @@
       <div class="settings-section">
         <h3 class="settings-section-title">收藏的歌曲</h3>
         <div v-if="favTracks.length === 0" class="muted" style="font-size: 13px;">暂无收藏的歌曲</div>
+        <!-- 使用 div 包装行，避免 button 嵌套（行内含 AddToPlaylist 等交互按钮） -->
         <div v-else class="fav-track-list">
-          <button
+          <div
             v-for="track in favTracks"
             :key="track.id"
             class="fav-track-row"
-            type="button"
-            @click="$emit('play-track', track)"
           >
-            <span class="fav-track-title" :title="track.title">{{ track.title }}</span>
+            <span class="fav-track-title fav-play-area" :title="track.title" role="button" tabindex="0" @click="$emit('play-track', track)" @keydown.enter="$emit('play-track', track)" @keydown.space.prevent="$emit('play-track', track)">{{ track.title }}</span>
             <span class="muted fav-track-meta">{{ track.artist }} · {{ track.album }}</span>
             <span class="muted fav-track-duration">{{ formatDuration(track.duration) }}</span>
-          </button>
+            <AddToPlaylist :api="api" :track-id="track.id" />
+          </div>
         </div>
       </div>
     </template>
@@ -85,17 +85,16 @@
         <h3 class="settings-section-title">最近播放</h3>
         <div v-if="recentTracks.length === 0" class="muted" style="font-size: 13px;">暂无播放记录</div>
         <div v-else class="fav-track-list">
-          <button
+          <div
             v-for="track in recentTracks"
             :key="track.id"
             class="fav-track-row"
-            type="button"
-            @click="$emit('play-track', track)"
           >
-            <span class="fav-track-title" :title="track.title">{{ track.title }}</span>
+            <span class="fav-track-title fav-play-area" :title="track.title" role="button" tabindex="0" @click="$emit('play-track', track)" @keydown.enter="$emit('play-track', track)" @keydown.space.prevent="$emit('play-track', track)">{{ track.title }}</span>
             <span class="muted fav-track-meta">{{ track.artist }} · {{ track.album }}</span>
             <span class="muted fav-track-duration">{{ formatDuration(track.duration) }}</span>
-          </button>
+            <AddToPlaylist :api="api" :track-id="track.id" />
+          </div>
         </div>
       </div>
     </template>
@@ -106,18 +105,17 @@
         <h3 class="settings-section-title">最常听</h3>
         <div v-if="topTracks.length === 0" class="muted" style="font-size: 13px;">暂无播放记录</div>
         <div v-else class="fav-track-list">
-          <button
+          <div
             v-for="(track, idx) in topTracks"
             :key="track.id"
             class="fav-track-row"
-            type="button"
-            @click="$emit('play-track', track)"
           >
             <span class="fav-track-rank muted">{{ idx + 1 }}</span>
-            <span class="fav-track-title" :title="track.title">{{ track.title }}</span>
+            <span class="fav-track-title fav-play-area" :title="track.title" role="button" tabindex="0" @click="$emit('play-track', track)" @keydown.enter="$emit('play-track', track)" @keydown.space.prevent="$emit('play-track', track)">{{ track.title }}</span>
             <span class="muted fav-track-meta">{{ track.artist }} · {{ track.album }}</span>
             <span class="muted fav-track-duration">{{ formatDuration(track.duration) }}</span>
-          </button>
+            <AddToPlaylist :api="api" :track-id="track.id" />
+          </div>
         </div>
       </div>
     </template>
@@ -127,6 +125,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import type { ApiClient, FavTrack, FavAlbum } from '../api/client'
+import AddToPlaylist from './AddToPlaylist.vue'
 
 const props = defineProps<{
   api: ApiClient
@@ -413,6 +412,17 @@ onMounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+
+/* 歌名点击区域：显示手型光标 */
+.fav-play-area {
+  cursor: pointer;
+}
+
+.fav-play-area:focus-visible {
+  outline: 2px solid var(--accent, #6ee7b7);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .fav-track-meta {

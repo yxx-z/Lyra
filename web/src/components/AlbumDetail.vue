@@ -68,50 +68,55 @@
 
       <!-- 精美曲目列表 -->
       <div class="track-list">
-        <button
+        <!-- 使用 div 包装行，避免 button 嵌套（row 内本来就有 heart-btn 等交互按钮） -->
+        <div
           v-for="track in album.tracks"
           :key="track.id"
           :class="{ active: playerStore.currentTrack?.trackId === track.id }"
           class="track-row"
-          type="button"
-          @click="$emit('play', track)"
         >
-          <!-- 左侧：序号/跳动的均衡器 -->
-          <span class="track-number">
-            <div
-              v-if="playerStore.currentTrack?.trackId === track.id && playerStore.isPlaying"
-              class="equalizer-icon"
-              title="正在播放"
-            >
-              <span class="eq-bar"></span>
-              <span class="eq-bar"></span>
-              <span class="eq-bar"></span>
-            </div>
-            <span v-else>{{ track.track_number || '-' }}</span>
-          </span>
-
-          <!-- 中间：歌名与音质信息 -->
-          <span class="track-title" :title="track.title">
-            {{ track.title }}
-            <span
-              v-if="track.format || track.bitrate"
-              class="muted"
-              style="font-size: 10px; font-weight: normal; margin-left: 6px; padding: 1px 4px; border-radius: 4px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.03);"
-            >
-              {{ track.format.toUpperCase() }} {{ Math.round(track.bitrate / 1000) }}K
+          <!-- 可点击的播放区域：序号 + 歌名 -->
+          <div class="track-play-area" role="button" tabindex="0" @click="$emit('play', track)" @keydown.enter="$emit('play', track)" @keydown.space.prevent="$emit('play', track)">
+            <!-- 左侧：序号/跳动的均衡器 -->
+            <span class="track-number">
+              <div
+                v-if="playerStore.currentTrack?.trackId === track.id && playerStore.isPlaying"
+                class="equalizer-icon"
+                title="正在播放"
+              >
+                <span class="eq-bar"></span>
+                <span class="eq-bar"></span>
+                <span class="eq-bar"></span>
+              </div>
+              <span v-else>{{ track.track_number || '-' }}</span>
             </span>
-          </span>
 
-          <!-- 右侧：红心 + 时长 -->
-          <button
-            class="heart-btn"
-            :class="{ starred: track.starred }"
-            type="button"
-            :title="track.starred ? '取消收藏' : '收藏'"
-            @click.stop="toggleTrackStar(track)"
-          >{{ track.starred ? '♥' : '♡' }}</button>
-          <span class="track-duration">{{ formatDuration(track.duration) }}</span>
-        </button>
+            <!-- 中间：歌名与音质信息 -->
+            <span class="track-title" :title="track.title">
+              {{ track.title }}
+              <span
+                v-if="track.format || track.bitrate"
+                class="muted"
+                style="font-size: 10px; font-weight: normal; margin-left: 6px; padding: 1px 4px; border-radius: 4px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.03);"
+              >
+                {{ track.format.toUpperCase() }} {{ Math.round(track.bitrate / 1000) }}K
+              </span>
+            </span>
+          </div>
+
+          <!-- 右侧操作区：红心 + 添加到歌单 + 时长 -->
+          <div class="track-actions">
+            <button
+              class="heart-btn"
+              :class="{ starred: track.starred }"
+              type="button"
+              :title="track.starred ? '取消收藏' : '收藏'"
+              @click.stop="toggleTrackStar(track)"
+            >{{ track.starred ? '♥' : '♡' }}</button>
+            <AddToPlaylist :api="api" :track-id="track.id" />
+            <span class="track-duration">{{ formatDuration(track.duration) }}</span>
+          </div>
+        </div>
       </div>
     </template>
   </aside>
@@ -121,6 +126,7 @@
 import { ref, computed, watch } from 'vue'
 import { usePlayerStore } from '../stores/player'
 import { ApiError, type ApiClient, type AlbumDetail, type TrackSummary } from '../api/client'
+import AddToPlaylist from './AddToPlaylist.vue'
 
 const props = defineProps<{
   album: AlbumDetail | null
@@ -222,6 +228,35 @@ watch(
 </script>
 
 <style scoped>
+/* 曲目行：flex 容器，播放区域 + 操作区 */
+.track-row {
+  display: flex;
+  align-items: center;
+}
+
+/* 播放区域占满剩余空间，鼠标显示手型 */
+.track-play-area {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.track-play-area:focus-visible {
+  outline: 2px solid var(--accent, #6ee7b7);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 操作区：不缩放，横向排列 */
+.track-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
 /* 红心收藏按钮 */
 .heart-btn {
   background: none;
