@@ -59,6 +59,27 @@ func (h *StarHandler) setStar(w http.ResponseWriter, r *http.Request, on bool) {
 	writeJSON(w, map[string]bool{"ok": true})
 }
 
+// StarStatus 处理 GET /api/v1/star?type=&id=：返回当前用户是否已收藏该对象。
+func (h *StarHandler) StarStatus(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "未登录")
+		return
+	}
+	typ := r.URL.Query().Get("type")
+	id := r.URL.Query().Get("id")
+	if !validStarType[typ] || id == "" {
+		writeJSONError(w, http.StatusBadRequest, "type 或 id 非法")
+		return
+	}
+	starred, err := h.store.IsStarred(u.ID, typ, id)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "查询失败")
+		return
+	}
+	writeJSON(w, map[string]bool{"starred": starred})
+}
+
 // Scrobble 处理 POST /api/v1/tracks/{id}/scrobble。
 func (h *StarHandler) Scrobble(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.UserFromContext(r.Context())

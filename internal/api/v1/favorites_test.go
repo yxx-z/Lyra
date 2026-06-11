@@ -89,3 +89,18 @@ func TestV1_ScrobbleAndRecent(t *testing.T) {
 		t.Errorf("recently-played 应含 t1: %s", w.Body.String())
 	}
 }
+
+func TestV1_StarStatus(t *testing.T) {
+	h, us, ss, u, _ := favFixture(t)
+	// 未收藏时应 false
+	w := favReq(t, h.StarStatus, ss, us, u, "GET", "/star?type=song&id=t1", "")
+	if !strings.Contains(w.Body.String(), `"starred":false`) {
+		t.Fatalf("未收藏应 starred:false: %s", w.Body.String())
+	}
+	// 收藏后应 true
+	favReq(t, h.Star, ss, us, u, "POST", "/star", `{"type":"song","id":"t1"}`)
+	w = favReq(t, h.StarStatus, ss, us, u, "GET", "/star?type=song&id=t1", "")
+	if !strings.Contains(w.Body.String(), `"starred":true`) {
+		t.Errorf("收藏后应 starred:true: %s", w.Body.String())
+	}
+}

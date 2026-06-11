@@ -56,11 +56,11 @@
             <!-- 专辑红心收藏按钮 -->
             <button
               class="heart-btn album-heart"
-              :class="{ starred: albumStarred }"
+              :class="{ starred: album.starred }"
               type="button"
-              :title="albumStarred ? '取消收藏专辑' : '收藏专辑'"
+              :title="album.starred ? '取消收藏专辑' : '收藏专辑'"
               @click="toggleAlbumStar"
-            >{{ albumStarred ? '♥' : '♡' }}</button>
+            >{{ album.starred ? '♥' : '♡' }}</button>
           </div>
           <p v-if="scrapeMessage" class="muted" style="font-size: 12px; margin-top: 8px;">{{ scrapeMessage }}</p>
         </div>
@@ -69,7 +69,7 @@
       <!-- 精美曲目列表 -->
       <div class="track-list">
         <button
-          v-for="track in localTracks"
+          v-for="track in album.tracks"
           :key="track.id"
           :class="{ active: playerStore.currentTrack?.trackId === track.id }"
           class="track-row"
@@ -147,12 +147,6 @@ const scraping = ref(false)
 const scrapeMessage = ref('')
 const coverVersion = ref(0)
 
-// 本地可变曲目列表（保持 starred 状态可即时翻转）
-const localTracks = ref<TrackSummary[]>([])
-
-// 专辑级别收藏状态
-const albumStarred = ref(false)
-
 // 带版本号的封面 URL：刮削后 bump 版本强制浏览器重取（同 URL 否则命中缓存）
 const coverSrc = computed(() =>
   props.album ? `${props.album.cover_url}?v=${coverVersion.value}` : '',
@@ -183,11 +177,12 @@ async function handleScrape() {
   }
 }
 
-// 专辑红心切换
+// 专辑红心切换：直接就地改 album.starred（同一对象引用，回流到父级 selectedAlbum，
+// 切走再回来即使组件重挂也能保留，无需整页刷新）。
 async function toggleAlbumStar() {
   if (!props.album) return
-  const next = !albumStarred.value
-  albumStarred.value = next
+  const next = !props.album.starred
+  props.album.starred = next
   try {
     if (next) {
       await props.api.star('album', props.album.id)
@@ -196,7 +191,7 @@ async function toggleAlbumStar() {
     }
   } catch {
     // 失败时回滚
-    albumStarred.value = !next
+    props.album.starred = !next
   }
 }
 
@@ -221,9 +216,6 @@ watch(
   () => {
     coverBroken.value = false
     scrapeMessage.value = ''
-    // 同步本地曲目列表与专辑收藏状态
-    localTracks.value = props.album ? props.album.tracks.map(t => ({ ...t })) : []
-    albumStarred.value = props.album?.starred ?? false
   },
   { immediate: true },
 )

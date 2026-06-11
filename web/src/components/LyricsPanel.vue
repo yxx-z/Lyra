@@ -34,6 +34,13 @@
         <div class="lyrics-song-info">
           <h3 class="lyrics-song-title">{{ playerStore.currentTrack.title }}</h3>
           <p class="lyrics-song-artist">{{ subtitle }}</p>
+          <button
+            class="lyrics-heart-btn"
+            :class="{ starred }"
+            type="button"
+            :title="starred ? '取消收藏' : '收藏'"
+            @click="toggleStar"
+          >{{ starred ? '♥' : '♡' }} {{ starred ? '已收藏' : '收藏' }}</button>
         </div>
       </div>
 
@@ -73,7 +80,7 @@
         </div>
 
         <!-- C. 标准滚动歌词面板 -->
-        <div v-else ref="scrollerRef" class="lyrics-scroller">
+        <div v-else ref="scrollerRef" class="lyrics-scroller" @wheel="markUserScroll" @touchmove="markUserScroll">
           <div v-if="!synced" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0 16px;">
             <button
               class="custom-btn-primary"
@@ -135,6 +142,53 @@ const upgrading = ref(false)
 const upgradeMessage = ref('')
 // 是否带时间轴（可滚动同步 + 点击跳转）；纯文本歌词为 false，静态展示
 const synced = ref(false)
+// 歌词滚动容器引用（仅滚动它本身，避免 scrollIntoView 连带滚动祖先/window 把关闭按钮顶走）
+const scrollerRef = ref<HTMLElement | null>(null)
+// 当前歌曲是否已收藏
+const starred = ref(false)
+// 用户正在手动滚动歌词：期间暂停自动对焦，方便靠歌词找进度
+const userScrolling = ref(false)
+let userScrollTimer: ReturnType<typeof setTimeout> | null = null
+
+// 标记用户手动滚动；4 秒内不自动把歌词拉回当前演唱句
+function markUserScroll() {
+  userScrolling.value = true
+  if (userScrollTimer) clearTimeout(userScrollTimer)
+  userScrollTimer = setTimeout(() => {
+    userScrolling.value = false
+  }, 4000)
+}
+
+// 拉取当前歌曲收藏状态
+async function loadStarStatus() {
+  const track = playerStore.currentTrack
+  if (!track) {
+    starred.value = false
+    return
+  }
+  try {
+    starred.value = (await props.api.getStarStatus('song', track.trackId)).starred
+  } catch {
+    starred.value = false
+  }
+}
+
+// 歌词界面红心：收藏/取消当前歌曲（乐观更新，失败回滚）
+async function toggleStar() {
+  const track = playerStore.currentTrack
+  if (!track) return
+  const next = !starred.value
+  starred.value = next
+  try {
+    if (next) {
+      await props.api.star('song', track.trackId)
+    } else {
+      await props.api.unstar('song', track.trackId)
+    }
+  } catch {
+    starred.value = !next
+  }
+}
 
 const subtitle = computed(() => {
   if (!playerStore.currentTrack) return ''
@@ -193,6 +247,7 @@ async function loadLyrics() {
   coverBroken.value = false
   scrapeMessage.value = ''
   upgradeMessage.value = ''
+  void loadStarStatus()
 
   try {
     const res = await props.api.getLyrics(track.trackId)
@@ -286,13 +341,20 @@ function syncLyricsIndex() {
   }
 }
 
-// 平滑滚动对焦至屏幕中线
+// 平滑滚动对焦至中线——只滚动歌词容器本身，不用 scrollIntoView
+// （后者会连带滚动祖先/window，而本面板祖先有 transform，会把 fixed 的关闭按钮顶出视野）。
+// 用户手动滚动期间（userScrolling）跳过，避免抢占。
 function scrollToActiveLine() {
+  if (userScrolling.value) return
   nextTick(() => {
-    const activeEl = document.querySelector('.lyric-line.active')
-    if (activeEl) {
-      activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
+    const scroller = scrollerRef.value
+    if (!scroller) return
+    const activeEl = scroller.querySelector('.lyric-line.active') as HTMLElement | null
+    if (!activeEl) return
+    const sRect = scroller.getBoundingClientRect()
+    const aRect = activeEl.getBoundingClientRect()
+    const delta = (aRect.top - sRect.top) - (scroller.clientHeight / 2 - activeEl.clientHeight / 2)
+    scroller.scrollTo({ top: scroller.scrollTop + delta, behavior: 'smooth' })
   })
 }
 
@@ -300,7 +362,9 @@ function scrollToActiveLine() {
 function seekToLine(time: number) {
   if (!synced.value || time < 0) return
   playerStore.seek(time)
-  // 跳转时间后，瞬间自我强行校正高亮，提供绝对顺畅对齐
+  // 显式点击歌词是“去这一句”的意图：清除手动滚动抑制并强行对焦
+  userScrolling.value = false
+  if (userScrollTimer) clearTimeout(userScrollTimer)
   syncLyricsIndex()
 }
 
@@ -332,6 +396,31 @@ watch(() => props.isOpen, (newVal) => {
 /* 纯文本歌词无时间轴，非交互：默认光标、不高亮 */
 .lyric-line.is-static {
   cursor: default;
+}
+/* 歌词界面收藏红心 */
+.lyrics-heart-btn {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid var(--border-glass, rgba(255, 255, 255, 0.12));
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted, rgba(255, 255, 255, 0.6));
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+.lyrics-heart-btn:hover {
+  color: var(--danger, #f87171);
+  border-color: var(--danger, #f87171);
+}
+.lyrics-heart-btn.starred {
+  color: var(--danger, #f87171);
+  border-color: var(--danger, #f87171);
+  background: rgba(248, 113, 113, 0.1);
 }
 @keyframes spin {
   from { transform: rotate(0deg); }

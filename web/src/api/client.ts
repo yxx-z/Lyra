@@ -381,6 +381,13 @@ export class ApiClient {
     })
   }
 
+  getStarStatus(type: 'song' | 'album' | 'artist', id: string): Promise<{ starred: boolean }> {
+    return this.request<{ starred: boolean }>(
+      `/api/v1/star?type=${encodeURIComponent(type)}&id=${encodeURIComponent(id)}`,
+      { method: 'GET' },
+    )
+  }
+
   getFavorites(): Promise<{ tracks: FavTrack[]; albums: FavAlbum[] }> {
     return this.request<{ tracks: FavTrack[]; albums: FavAlbum[] }>('/api/v1/favorites')
   }

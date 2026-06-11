@@ -123,6 +123,7 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 		search := v1.NewSearchHandler(db, udStore)
 		r.Get("/search", search.Search)
 
+		r.Get("/star", starH.StarStatus)
 		r.Post("/star", starH.Star)
 		r.Post("/unstar", starH.Unstar)
 		r.Post("/tracks/{id}/scrobble", starH.Scrobble)
