@@ -266,12 +266,6 @@ func (h *Handler) getAlbumList2(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, 0, "查询失败")
 		return
 	}
-	defer rows.Close()
-
-	var starredMap map[string]string
-	if u != nil {
-		starredMap, _ = h.store.StarredMap(u.ID, userdata.TypeAlbum)
-	}
 	list := &AlbumList2{}
 	for rows.Next() {
 		var al AlbumID3
@@ -282,10 +276,18 @@ func (h *Handler) getAlbumList2(w http.ResponseWriter, r *http.Request) {
 		al.CoverArt = al.ID
 		al.Year = yearFromDate(date)
 		al.Genre = genre
-		if ts, ok := starredMap[al.ID]; ok {
-			al.Starred = ts
-		}
 		list.Album = append(list.Album, al)
+	}
+	rows.Close() // 显式关闭，避免后续 StarredMap 开新查询时与单连接池冲突（与本包其它注解路径一致）
+
+	if u != nil {
+		if m, _ := h.store.StarredMap(u.ID, userdata.TypeAlbum); len(m) > 0 {
+			for i := range list.Album {
+				if ts, ok := m[list.Album[i].ID]; ok {
+					list.Album[i].Starred = ts
+				}
+			}
+		}
 	}
 	writeResponse(w, r, &Response{AlbumList2: list})
 }
