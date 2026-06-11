@@ -83,8 +83,10 @@
         <AlbumDetail
           :album="selectedAlbum"
           :api="api"
+          :is-admin="currentUser?.isAdmin ?? false"
           @play="playAlbumTrack"
           @refresh="refreshSelectedAlbum"
+          @deleted="onAlbumDeleted"
         />
       </div>
 
@@ -385,6 +387,15 @@ async function refreshSelectedAlbum() {
     selectedAlbum.value = await api.getAlbum(selectedAlbum.value.id)
   } catch (error) {
     handleApiError(error)
+  }
+}
+
+// 专辑删除后：清空选中状态、重载专辑列表、展示文件删除错误（如有）
+async function onAlbumDeleted(fileErrors: string[]) {
+  selectedAlbum.value = null
+  await loadAlbums()
+  if (fileErrors && fileErrors.length) {
+    globalError.value = `已从库删除，但 ${fileErrors.length} 个文件未能删除（音乐目录可能为只读挂载）`
   }
 }
 

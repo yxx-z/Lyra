@@ -451,6 +451,21 @@ export class ApiClient {
     })
   }
 
+  // ── 专辑 / 艺术家删除（管理员） ──────────────────────────────
+  deleteAlbum(id: string, deleteFiles: boolean): Promise<{ ok: boolean; filesDeleted: number; fileErrors: string[] }> {
+    return this.request<{ ok: boolean; filesDeleted: number; fileErrors: string[] }>(
+      `/api/v1/albums/${encodeURIComponent(id)}?deleteFiles=${deleteFiles}`,
+      { method: 'DELETE' },
+    )
+  }
+
+  deleteArtist(id: string, deleteFiles: boolean): Promise<{ ok: boolean; filesDeleted: number; fileErrors: string[] }> {
+    return this.request<{ ok: boolean; filesDeleted: number; fileErrors: string[] }>(
+      `/api/v1/artists/${encodeURIComponent(id)}?deleteFiles=${deleteFiles}`,
+      { method: 'DELETE' },
+    )
+  }
+
   private async request<T>(
     path: string,
     options: RequestInit & { auth?: boolean } = {},

@@ -61,8 +61,20 @@
               :title="album.starred ? '取消收藏专辑' : '收藏专辑'"
               @click="toggleAlbumStar"
             >{{ album.starred ? '♥' : '♡' }}</button>
+            <!-- 管理员专辑删除入口 -->
+            <button v-if="isAdmin" class="danger-btn" type="button" @click="confirmingDelete = true">删除专辑</button>
           </div>
           <p v-if="scrapeMessage" class="muted" style="font-size: 12px; margin-top: 8px;">{{ scrapeMessage }}</p>
+          <!-- 删除确认区域 -->
+          <div v-if="confirmingDelete" class="delete-confirm">
+            <p>确认删除专辑「{{ album.title }}」？这会从音乐库移除该专辑及其曲目。</p>
+            <label><input type="checkbox" v-model="alsoDeleteFiles" /> 同时删除硬盘文件</label>
+            <p v-if="alsoDeleteFiles" class="warn">⚠ 文件将被永久删除且不可恢复；若音乐目录为只读挂载会删除失败。</p>
+            <div class="delete-actions">
+              <button class="danger-btn" type="button" :disabled="deleting" @click="doDelete">确认删除</button>
+              <button type="button" :disabled="deleting" @click="confirmingDelete = false; alsoDeleteFiles = false">取消</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -131,11 +143,13 @@ import AddToPlaylist from './AddToPlaylist.vue'
 const props = defineProps<{
   album: AlbumDetail | null
   api: ApiClient
+  isAdmin?: boolean
 }>()
 
 const emit = defineEmits<{
   play: [track: TrackSummary]
   refresh: []
+  deleted: [fileErrors: string[]]
 }>()
 
 // 引入全局播放 Store，监测当前歌曲和播放动画
@@ -152,6 +166,9 @@ const coverBroken = ref(false)
 const scraping = ref(false)
 const scrapeMessage = ref('')
 const coverVersion = ref(0)
+const confirmingDelete = ref(false)
+const alsoDeleteFiles = ref(false)
+const deleting = ref(false)
 
 // 带版本号的封面 URL：刮削后 bump 版本强制浏览器重取（同 URL 否则命中缓存）
 const coverSrc = computed(() =>
@@ -217,11 +234,28 @@ async function toggleTrackStar(track: TrackSummary) {
   }
 }
 
+async function doDelete() {
+  if (!props.album) return
+  deleting.value = true
+  try {
+    const res = await props.api.deleteAlbum(props.album.id, alsoDeleteFiles.value)
+    confirmingDelete.value = false
+    alsoDeleteFiles.value = false
+    emit('deleted', res.fileErrors || [])
+  } catch {
+    // 失败时保持确认区打开；交由上层 globalError 或此处提示
+  } finally {
+    deleting.value = false
+  }
+}
+
 watch(
   () => props.album?.id,
   () => {
     coverBroken.value = false
     scrapeMessage.value = ''
+    confirmingDelete.value = false
+    alsoDeleteFiles.value = false
   },
   { immediate: true },
 )
@@ -282,5 +316,84 @@ watch(
 .heart-btn.album-heart {
   font-size: 20px;
   padding: 4px 6px;
+}
+
+/* 管理员危险操作按钮（红色） */
+.danger-btn {
+  background: rgba(248, 113, 113, 0.15);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: var(--danger, #f87171);
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.danger-btn:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.28);
+  border-color: rgba(248, 113, 113, 0.7);
+}
+
+.danger-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 删除确认卡片 */
+.delete-confirm {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: 8px;
+  background: rgba(248, 113, 113, 0.06);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.delete-confirm p {
+  margin: 0 0 8px;
+}
+
+.delete-confirm label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* 警告红字 */
+.warn {
+  color: var(--danger, #f87171);
+  font-size: 12px;
+  margin-top: 6px !important;
+}
+
+/* 确认操作按钮行 */
+.delete-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.delete-actions button:last-child {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-dim, rgba(255, 255, 255, 0.6));
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.delete-actions button:last-child:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.delete-actions button:last-child:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>
