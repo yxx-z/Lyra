@@ -70,6 +70,7 @@
             <p>确认删除专辑「{{ album.title }}」？这会从音乐库移除该专辑及其曲目。</p>
             <label><input type="checkbox" v-model="alsoDeleteFiles" /> 同时删除硬盘文件</label>
             <p v-if="alsoDeleteFiles" class="warn">⚠ 文件将被永久删除且不可恢复；若音乐目录为只读挂载会删除失败。</p>
+            <p v-if="deleteError" class="warn">{{ deleteError }}</p>
             <div class="delete-actions">
               <button class="danger-btn" type="button" :disabled="deleting" @click="doDelete">确认删除</button>
               <button type="button" :disabled="deleting" @click="confirmingDelete = false; alsoDeleteFiles = false">取消</button>
@@ -169,6 +170,7 @@ const coverVersion = ref(0)
 const confirmingDelete = ref(false)
 const alsoDeleteFiles = ref(false)
 const deleting = ref(false)
+const deleteError = ref('')
 
 // 带版本号的封面 URL：刮削后 bump 版本强制浏览器重取（同 URL 否则命中缓存）
 const coverSrc = computed(() =>
@@ -236,14 +238,15 @@ async function toggleTrackStar(track: TrackSummary) {
 
 async function doDelete() {
   if (!props.album) return
+  deleteError.value = ''
   deleting.value = true
   try {
     const res = await props.api.deleteAlbum(props.album.id, alsoDeleteFiles.value)
     confirmingDelete.value = false
     alsoDeleteFiles.value = false
     emit('deleted', res.fileErrors || [])
-  } catch {
-    // 失败时保持确认区打开；交由上层 globalError 或此处提示
+  } catch (e) {
+    deleteError.value = e instanceof Error ? e.message : '删除失败'
   } finally {
     deleting.value = false
   }
@@ -256,6 +259,7 @@ watch(
     scrapeMessage.value = ''
     confirmingDelete.value = false
     alsoDeleteFiles.value = false
+    deleteError.value = ''
   },
   { immediate: true },
 )

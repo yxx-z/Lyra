@@ -41,6 +41,7 @@
             <p class="warn">⚠ 确认删除歌手「{{ selectedArtist.name }}」？将删除该歌手名下的<strong>全部专辑与曲目</strong>，不可恢复。</p>
             <label><input type="checkbox" v-model="alsoDeleteFiles" /> 同时删除硬盘文件</label>
             <p v-if="alsoDeleteFiles" class="warn">⚠ 硬盘文件将被永久删除；若音乐目录为只读挂载会删除失败。</p>
+            <p v-if="deleteError" class="warn">{{ deleteError }}</p>
             <div class="delete-actions">
               <button class="danger-btn" type="button" :disabled="deleting" @click="doDelete">确认删除</button>
               <button type="button" :disabled="deleting" @click="confirmingDelete = false; alsoDeleteFiles = false">取消</button>
@@ -92,7 +93,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import type { ArtistDetail, ArtistSummary, ApiClient } from '../api/client'
 
 const props = defineProps<{
@@ -113,6 +114,7 @@ const brokenCovers = ref(new Set<string>())
 const confirmingDelete = ref(false)
 const alsoDeleteFiles = ref(false)
 const deleting = ref(false)
+const deleteError = ref('')
 
 function markCoverBroken(id: string) {
   brokenCovers.value = new Set([...brokenCovers.value, id])
@@ -120,18 +122,25 @@ function markCoverBroken(id: string) {
 
 async function doDelete() {
   if (!props.selectedArtist) return
+  deleteError.value = ''
   deleting.value = true
   try {
     const res = await props.api.deleteArtist(props.selectedArtist.id, alsoDeleteFiles.value)
     confirmingDelete.value = false
     alsoDeleteFiles.value = false
     emit('deleted', res.fileErrors || [])
-  } catch {
-    // 保持确认区打开
+  } catch (e) {
+    deleteError.value = e instanceof Error ? e.message : '删除失败'
   } finally {
     deleting.value = false
   }
 }
+
+watch(() => props.selectedArtist?.id, () => {
+  confirmingDelete.value = false
+  alsoDeleteFiles.value = false
+  deleteError.value = ''
+})
 </script>
 
 <style scoped>
