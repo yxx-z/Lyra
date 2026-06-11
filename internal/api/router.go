@@ -18,6 +18,7 @@ import (
 	"github.com/yxx-z/lyra/internal/config"
 	lyricspkg "github.com/yxx-z/lyra/internal/lyrics"
 	metadatapkg "github.com/yxx-z/lyra/internal/metadata"
+	"github.com/yxx-z/lyra/internal/playlists"
 	"github.com/yxx-z/lyra/internal/scanner"
 	"github.com/yxx-z/lyra/internal/transcode"
 	"github.com/yxx-z/lyra/internal/userdata"
@@ -45,6 +46,7 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 	sessions := auth.NewSessionStore(db)
 	settings := auth.NewSettingsStore(db)
 	udStore := userdata.NewStore(db)
+	plStore := playlists.NewStore(db)
 
 	r.Get("/health", handleHealth)
 
@@ -52,6 +54,7 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 	setupH := v1.NewSetupHandler(users, sessions, db)
 	accountH := v1.NewAccountHandler(users, key)
 	starH := v1.NewStarHandler(db, udStore)
+	plH := v1.NewPlaylistHandler(db, plStore)
 	adminH := v1.NewAdminHandler(users, settings)
 	registerH := v1.NewRegisterHandler(users, sessions, settings)
 	r.Post("/api/v1/auth/login", authH.Login)
@@ -130,10 +133,18 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 		r.Get("/favorites", starH.Favorites)
 		r.Get("/recently-played", starH.RecentlyPlayed)
 		r.Get("/most-played", starH.MostPlayed)
+
+		r.Get("/playlists", plH.List)
+		r.Post("/playlists", plH.Create)
+		r.Get("/playlists/{id}", plH.Get)
+		r.Patch("/playlists/{id}", plH.Update)
+		r.Delete("/playlists/{id}", plH.Delete)
+		r.Post("/playlists/{id}/tracks", plH.AddTracks)
+		r.Put("/playlists/{id}/tracks", plH.ReplaceTracks)
 	})
 
 	subCover := v1.NewCoverHandler(db)
-	subHandler := subsonic.NewHandler(db, cfg, streamH, subCover, users, key, udStore)
+	subHandler := subsonic.NewHandler(db, cfg, streamH, subCover, users, key, udStore, plStore)
 	r.Route("/rest", subHandler.RegisterRoutes)
 
 	// 所有非 API 路由返回嵌入的前端文件
