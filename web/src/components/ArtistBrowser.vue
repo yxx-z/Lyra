@@ -33,6 +33,19 @@
           <p class="muted" style="font-size: 13px; margin-top: 4px;">
             共收录该歌手的 {{ selectedArtist.albums?.length || 0 }} 部高品质实体音乐专辑
           </p>
+          <div style="margin-top: 12px;">
+            <button v-if="isAdmin && selectedArtist" class="danger-btn" type="button" @click="confirmingDelete = true">删除歌手</button>
+          </div>
+          <!-- 删除确认区域 -->
+          <div v-if="confirmingDelete && selectedArtist" class="delete-confirm">
+            <p class="warn">⚠ 确认删除歌手「{{ selectedArtist.name }}」？将删除该歌手名下的<strong>全部专辑与曲目</strong>，不可恢复。</p>
+            <label><input type="checkbox" v-model="alsoDeleteFiles" /> 同时删除硬盘文件</label>
+            <p v-if="alsoDeleteFiles" class="warn">⚠ 硬盘文件将被永久删除；若音乐目录为只读挂载会删除失败。</p>
+            <div class="delete-actions">
+              <button class="danger-btn" type="button" :disabled="deleting" @click="doDelete">确认删除</button>
+              <button type="button" :disabled="deleting" @click="confirmingDelete = false; alsoDeleteFiles = false">取消</button>
+            </div>
+          </div>
         </div>
 
         <div class="compact-album-grid">
@@ -80,22 +93,124 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { ArtistDetail, ArtistSummary } from '../api/client'
+import type { ArtistDetail, ArtistSummary, ApiClient } from '../api/client'
 
-defineProps<{
+const props = defineProps<{
   artists: ArtistSummary[]
   selectedArtist: ArtistDetail | null
+  api: ApiClient
+  isAdmin?: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   'select-artist': [id: string]
   'select-album': [id: string]
   'quick-play-album': [id: string]
+  'deleted': [fileErrors: string[]]
 }>()
 
 const brokenCovers = ref(new Set<string>())
+const confirmingDelete = ref(false)
+const alsoDeleteFiles = ref(false)
+const deleting = ref(false)
 
 function markCoverBroken(id: string) {
   brokenCovers.value = new Set([...brokenCovers.value, id])
 }
+
+async function doDelete() {
+  if (!props.selectedArtist) return
+  deleting.value = true
+  try {
+    const res = await props.api.deleteArtist(props.selectedArtist.id, alsoDeleteFiles.value)
+    confirmingDelete.value = false
+    alsoDeleteFiles.value = false
+    emit('deleted', res.fileErrors || [])
+  } catch {
+    // 保持确认区打开
+  } finally {
+    deleting.value = false
+  }
+}
 </script>
+
+<style scoped>
+/* 管理员危险操作按钮（红色） */
+.danger-btn {
+  background: rgba(248, 113, 113, 0.15);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: var(--danger, #f87171);
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.danger-btn:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.28);
+  border-color: rgba(248, 113, 113, 0.7);
+}
+
+.danger-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 删除确认卡片 */
+.delete-confirm {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: 8px;
+  background: rgba(248, 113, 113, 0.06);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.delete-confirm p {
+  margin: 0 0 8px;
+}
+
+.delete-confirm label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* 警告红字 */
+.warn {
+  color: var(--danger, #f87171);
+  font-size: 12px;
+  margin-top: 6px !important;
+}
+
+/* 确认操作按钮行 */
+.delete-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.delete-actions button:last-child {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-dim, rgba(255, 255, 255, 0.6));
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.delete-actions button:last-child:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.delete-actions button:last-child:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+</style>

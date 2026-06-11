@@ -95,9 +95,12 @@
         v-else-if="mode === 'artists'"
         :artists="artists"
         :selected-artist="selectedArtist"
+        :is-admin="currentUser?.isAdmin ?? false"
+        :api="api"
         @select-artist="selectArtist"
         @select-album="selectAlbum"
         @quick-play-album="playEntireAlbum"
+        @deleted="onArtistDeleted"
       />
 
       <!-- 模块 D: 收藏夹（我的收藏/最近播放/最常听） -->
@@ -394,6 +397,15 @@ async function refreshSelectedAlbum() {
 async function onAlbumDeleted(fileErrors: string[]) {
   selectedAlbum.value = null
   await loadAlbums()
+  if (fileErrors && fileErrors.length) {
+    globalError.value = `已从库删除，但 ${fileErrors.length} 个文件未能删除（音乐目录可能为只读挂载）`
+  }
+}
+
+// 歌手删除后：清空选中状态、重载歌手与专辑列表、展示文件删除错误（如有）
+async function onArtistDeleted(fileErrors: string[]) {
+  selectedArtist.value = null
+  await Promise.all([loadArtists(), loadAlbums()])
   if (fileErrors && fileErrors.length) {
     globalError.value = `已从库删除，但 ${fileErrors.length} 个文件未能删除（音乐目录可能为只读挂载）`
   }
