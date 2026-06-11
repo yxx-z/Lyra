@@ -61,5 +61,6 @@ func (h *Handler) search3(w http.ResponseWriter, r *http.Request) {
 		rows.Close()
 	}
 
+	h.annotateSongs(userFromCtx(r.Context()), res.Song)
 	writeResponse(w, r, &Response{SearchResult3: res})
 }

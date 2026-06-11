@@ -66,3 +66,13 @@ func TestGetStarred2_PerUserIsolation(t *testing.T) {
 	}
 }
 
+func TestGetSong_StarredAnnotation(t *testing.T) {
+	h, _ := testHandler(t)
+	seed(t, h.db)
+	doReq(t, h, "/rest/star?u=admin&p=secret&id=t1&f=json")
+	w := doReq(t, h, "/rest/getSong?u=admin&p=secret&id=t1&f=json")
+	if !strings.Contains(w.Body.String(), `"starred"`) {
+		t.Errorf("已收藏歌曲 getSong 应含 starred 属性: %s", w.Body.String())
+	}
+}
+

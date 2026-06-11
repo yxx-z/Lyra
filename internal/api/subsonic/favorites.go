@@ -3,6 +3,7 @@ package subsonic
 import (
 	"net/http"
 
+	"github.com/yxx-z/lyra/internal/auth"
 	"github.com/yxx-z/lyra/internal/userdata"
 )
 
@@ -69,6 +70,22 @@ func (h *Handler) artistSummaryByID(id string) (ArtistID3, bool) {
 		return ArtistID3{}, false
 	}
 	return ar, true
+}
+
+// annotateSongs 用当前用户的歌曲收藏批量标注 Child.Starred。
+func (h *Handler) annotateSongs(u *auth.User, songs []Child) {
+	if u == nil || len(songs) == 0 {
+		return
+	}
+	m, err := h.store.StarredMap(u.ID, userdata.TypeSong)
+	if err != nil || len(m) == 0 {
+		return
+	}
+	for i := range songs {
+		if ts, ok := m[songs[i].ID]; ok {
+			songs[i].Starred = ts
+		}
+	}
 }
 
 // setStar 按 id（歌曲）、albumId、artistId 三类多值参数加/取消收藏。

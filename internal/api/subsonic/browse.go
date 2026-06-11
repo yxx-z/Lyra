@@ -165,7 +165,6 @@ func (h *Handler) getAlbum(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, 0, "查询失败")
 		return
 	}
-	defer rows.Close()
 	for rows.Next() {
 		c, err := scanChild(rows)
 		if err != nil {
@@ -173,10 +172,12 @@ func (h *Handler) getAlbum(w http.ResponseWriter, r *http.Request) {
 		}
 		al.Song = append(al.Song, c)
 	}
+	rows.Close() // 显式关闭，避免后续 annotateSongs 开新查询时与单连接池死锁
 	al.SongCount = len(al.Song)
 	for _, s := range al.Song {
 		al.Duration += s.Duration
 	}
+	h.annotateSongs(userFromCtx(r.Context()), al.Song)
 	writeResponse(w, r, &Response{Album: &al})
 }
 
@@ -187,16 +188,23 @@ func (h *Handler) getSong(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, 0, "查询失败")
 		return
 	}
-	defer rows.Close()
-	if !rows.Next() {
+	found := rows.Next()
+	var c Child
+	if found {
+		c, err = scanChild(rows)
+	}
+	rows.Close() // 显式关闭，避免后续 annotateSongs 开新查询时与单连接池死锁
+	if !found {
 		writeError(w, r, 70, "曲目不存在")
 		return
 	}
-	c, err := scanChild(rows)
 	if err != nil {
 		writeError(w, r, 0, "查询失败")
 		return
 	}
+	songs := []Child{c}
+	h.annotateSongs(userFromCtx(r.Context()), songs)
+	c = songs[0]
 	writeResponse(w, r, &Response{Song: &c})
 }
 
