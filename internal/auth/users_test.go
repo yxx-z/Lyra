@@ -65,3 +65,66 @@ func TestUserStore_FirstAdmin(t *testing.T) {
 		t.Errorf("FirstAdmin 应返回 u2: got=%+v err=%v", got, err)
 	}
 }
+
+func TestUserStore_ListDeleteRoleAdminCount(t *testing.T) {
+	d, _ := db.Open(":memory:")
+	defer d.Close()
+	s := NewUserStore(d)
+	a, _ := s.Create("admin", "h", true)
+	b, _ := s.Create("bob", "h", false)
+	if err := s.UpdateSubsonicPW(b.ID, []byte{1, 2, 3}); err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := s.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("应有 2 个用户，实际 %d", len(list))
+	}
+	var bobSum *UserSummary
+	for i := range list {
+		if list[i].Username == "bob" {
+			bobSum = &list[i]
+		}
+	}
+	if bobSum == nil || bobSum.IsAdmin || !bobSum.HasSubsonicPassword {
+		t.Errorf("bob 摘要不符: %+v", bobSum)
+	}
+
+	if n, _ := s.AdminCount(); n != 1 {
+		t.Errorf("AdminCount 应为 1，实际 %d", n)
+	}
+	if err := s.UpdateRole(b.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := s.AdminCount(); n != 2 {
+		t.Errorf("升级后 AdminCount 应为 2，实际 %d", n)
+	}
+	if err := s.Delete(b.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ByID(b.ID); err == nil {
+		t.Error("删除后 ByID 应失败")
+	}
+	_ = a
+}
+
+func TestUserStore_DeleteCascadesSessions(t *testing.T) {
+	d, _ := db.Open(":memory:")
+	defer d.Close()
+	us := NewUserStore(d)
+	ss := NewSessionStore(d)
+	u, _ := us.Create("bob", "h", false)
+	token, _ := ss.Create(u.ID, 3600*1e9) // 1h in ns
+	if _, ok := ss.UserID(token); !ok {
+		t.Fatal("会话应存在")
+	}
+	if err := us.Delete(u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := ss.UserID(token); ok {
+		t.Error("删用户后其会话应被级联清理")
+	}
+}
