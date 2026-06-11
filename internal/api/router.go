@@ -20,6 +20,7 @@ import (
 	metadatapkg "github.com/yxx-z/lyra/internal/metadata"
 	"github.com/yxx-z/lyra/internal/scanner"
 	"github.com/yxx-z/lyra/internal/transcode"
+	"github.com/yxx-z/lyra/internal/userdata"
 	"github.com/yxx-z/lyra/ui"
 )
 
@@ -43,12 +44,14 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 	users := auth.NewUserStore(db)
 	sessions := auth.NewSessionStore(db)
 	settings := auth.NewSettingsStore(db)
+	udStore := userdata.NewStore(db)
 
 	r.Get("/health", handleHealth)
 
 	authH := v1.NewAuthHandler(users, sessions)
 	setupH := v1.NewSetupHandler(users, sessions, db)
 	accountH := v1.NewAccountHandler(users, key)
+	starH := v1.NewStarHandler(db, udStore)
 	adminH := v1.NewAdminHandler(users, settings)
 	registerH := v1.NewRegisterHandler(users, sessions, settings)
 	r.Post("/api/v1/auth/login", authH.Login)
@@ -81,7 +84,7 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 		r.Post("/library/scan", lib.TriggerScan)
 		r.Get("/library/scan/status", lib.ScanStatus)
 
-		albums := v1.NewAlbumsHandler(db)
+		albums := v1.NewAlbumsHandler(db, udStore)
 		r.Get("/albums", albums.ListAlbums)
 		r.Get("/albums/{id}", albums.GetAlbum)
 
@@ -117,12 +120,19 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 		albumScrape := v1.NewAlbumScrapeHandler(metadataService)
 		r.Post("/albums/{id}/scrape", albumScrape.ScrapeAlbum)
 
-		search := v1.NewSearchHandler(db)
+		search := v1.NewSearchHandler(db, udStore)
 		r.Get("/search", search.Search)
+
+		r.Post("/star", starH.Star)
+		r.Post("/unstar", starH.Unstar)
+		r.Post("/tracks/{id}/scrobble", starH.Scrobble)
+		r.Get("/favorites", starH.Favorites)
+		r.Get("/recently-played", starH.RecentlyPlayed)
+		r.Get("/most-played", starH.MostPlayed)
 	})
 
 	subCover := v1.NewCoverHandler(db)
-	subHandler := subsonic.NewHandler(db, cfg, streamH, subCover, users, key)
+	subHandler := subsonic.NewHandler(db, cfg, streamH, subCover, users, key, udStore)
 	r.Route("/rest", subHandler.RegisterRoutes)
 
 	// 所有非 API 路由返回嵌入的前端文件
