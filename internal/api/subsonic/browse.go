@@ -6,6 +6,9 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/yxx-z/lyra/internal/auth"
+	"github.com/yxx-z/lyra/internal/userdata"
 )
 
 var suffixContentType = map[string]string{
@@ -198,37 +201,69 @@ func (h *Handler) getSong(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getAlbumList2(w http.ResponseWriter, r *http.Request) {
+	u := userFromCtx(r.Context())
 	typ := r.Form.Get("type")
-	var orderBy string
-	switch typ {
-	case "newest", "recent":
-		orderBy = "al.created_at DESC"
-	case "alphabeticalByName", "":
-		orderBy = "al.title"
-	case "random":
-		orderBy = "RANDOM()"
-	default:
-		writeError(w, r, 10, "不支持的 type")
-		return
-	}
 	size := atoiDefault(r.Form.Get("size"), 10)
 	if size > 500 {
 		size = 500
 	}
 	offset := atoiDefault(r.Form.Get("offset"), 0)
 
-	rows, err := h.db.Query(`
+	const base = `
 		SELECT al.id, al.title, COALESCE(al.artist_id,''), COALESCE(ar.name,''),
 		       COALESCE(al.release_date,''), COALESCE(al.genre,''),
 		       (SELECT COUNT(*) FROM tracks WHERE album_id=al.id AND is_available=1),
 		       (SELECT COALESCE(SUM(duration),0) FROM tracks WHERE album_id=al.id AND is_available=1)
-		FROM albums al LEFT JOIN artists ar ON ar.id=al.artist_id
-		ORDER BY `+orderBy+` LIMIT ? OFFSET ?`, size, offset)
+		FROM albums al LEFT JOIN artists ar ON ar.id=al.artist_id `
+
+	var query string
+	var args []any
+	switch typ {
+	case "newest":
+		query = base + `ORDER BY al.created_at DESC LIMIT ? OFFSET ?`
+		args = []any{size, offset}
+	case "alphabeticalByName", "":
+		query = base + `ORDER BY al.title LIMIT ? OFFSET ?`
+		args = []any{size, offset}
+	case "random":
+		query = base + `ORDER BY RANDOM() LIMIT ? OFFSET ?`
+		args = []any{size, offset}
+	case "recent":
+		query = base + `JOIN (
+			SELECT t.album_id AS aid, MAX(ps.last_played_at) AS lp
+			FROM play_stats ps JOIN tracks t ON t.id=ps.track_id
+			WHERE ps.user_id=? AND ps.last_played_at IS NOT NULL AND t.album_id IS NOT NULL
+			GROUP BY t.album_id
+		) r ON r.aid=al.id ORDER BY r.lp DESC LIMIT ? OFFSET ?`
+		args = []any{userID(u), size, offset}
+	case "frequent":
+		query = base + `JOIN (
+			SELECT t.album_id AS aid, SUM(ps.play_count) AS pc
+			FROM play_stats ps JOIN tracks t ON t.id=ps.track_id
+			WHERE ps.user_id=? AND t.album_id IS NOT NULL
+			GROUP BY t.album_id
+		) f ON f.aid=al.id ORDER BY f.pc DESC LIMIT ? OFFSET ?`
+		args = []any{userID(u), size, offset}
+	case "starred":
+		query = base + `JOIN starred s ON s.item_id=al.id AND s.item_type='album' AND s.user_id=?
+			ORDER BY s.created_at DESC LIMIT ? OFFSET ?`
+		args = []any{userID(u), size, offset}
+	default:
+		writeError(w, r, 10, "不支持的 type")
+		return
+	}
+
+	rows, err := h.db.Query(query, args...)
 	if err != nil {
 		writeError(w, r, 0, "查询失败")
 		return
 	}
 	defer rows.Close()
+
+	var starredMap map[string]string
+	if u != nil {
+		starredMap, _ = h.store.StarredMap(u.ID, userdata.TypeAlbum)
+	}
 	list := &AlbumList2{}
 	for rows.Next() {
 		var al AlbumID3
@@ -239,9 +274,20 @@ func (h *Handler) getAlbumList2(w http.ResponseWriter, r *http.Request) {
 		al.CoverArt = al.ID
 		al.Year = yearFromDate(date)
 		al.Genre = genre
+		if ts, ok := starredMap[al.ID]; ok {
+			al.Starred = ts
+		}
 		list.Album = append(list.Album, al)
 	}
 	writeResponse(w, r, &Response{AlbumList2: list})
+}
+
+// userID 安全取用户 id（u 可能为 nil）。
+func userID(u *auth.User) string {
+	if u == nil {
+		return ""
+	}
+	return u.ID
 }
 
 func atoiDefault(s string, def int) int {

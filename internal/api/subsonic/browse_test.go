@@ -78,3 +78,42 @@ func TestGetAlbumList2(t *testing.T) {
 		t.Errorf("未知 type 应 10: %s", w2.Body.String())
 	}
 }
+
+func TestScrobble_PerUser(t *testing.T) {
+	h, _ := testHandler(t)
+	seed(t, h.db)
+	doReq(t, h, "/rest/scrobble?u=admin&p=secret&id=t1&f=json")
+	var cnt int
+	var uid string
+	h.db.QueryRow(`SELECT play_count, user_id FROM play_stats WHERE track_id='t1'`).Scan(&cnt, &uid)
+	if cnt != 1 || uid == "" {
+		t.Errorf("scrobble 应记入 play_stats: cnt=%d uid=%q", cnt, uid)
+	}
+}
+
+func TestGetAlbumList2_Frequent(t *testing.T) {
+	h, _ := testHandler(t)
+	seed(t, h.db)
+	for i := 0; i < 3; i++ {
+		doReq(t, h, "/rest/scrobble?u=admin&p=secret&id=t1&f=json")
+	}
+	w := doReq(t, h, "/rest/getAlbumList2?u=admin&p=secret&type=frequent&f=json")
+	if !strings.Contains(w.Body.String(), `"albumList2"`) {
+		t.Errorf("frequent 应返回 albumList2: %s", w.Body.String())
+	}
+}
+
+func TestGetAlbumList2_Starred(t *testing.T) {
+	h, _ := testHandler(t)
+	seed(t, h.db)
+	var albumID string
+	h.db.QueryRow(`SELECT COALESCE(album_id,'') FROM tracks WHERE id='t1'`).Scan(&albumID)
+	if albumID == "" {
+		t.Skip("seed 未给 t1 设专辑")
+	}
+	doReq(t, h, "/rest/star?u=admin&p=secret&albumId="+albumID+"&f=json")
+	w := doReq(t, h, "/rest/getAlbumList2?u=admin&p=secret&type=starred&f=json")
+	if !strings.Contains(w.Body.String(), albumID) {
+		t.Errorf("starred 列表应含已收藏专辑 %s: %s", albumID, w.Body.String())
+	}
+}

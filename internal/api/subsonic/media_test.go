@@ -12,10 +12,11 @@ func TestScrobble(t *testing.T) {
 	if !strings.Contains(w.Body.String(), `"status":"ok"`) {
 		t.Errorf("scrobble: %s", w.Body.String())
 	}
+	// scrobble 已改为 per-user play_stats，不再更新 tracks.play_count
 	var pc int
-	h.db.QueryRow(`SELECT play_count FROM tracks WHERE id='t1'`).Scan(&pc)
+	h.db.QueryRow(`SELECT play_count FROM play_stats WHERE track_id='t1'`).Scan(&pc)
 	if pc != 1 {
-		t.Errorf("play_count 应为 1，得到 %d", pc)
+		t.Errorf("play_stats.play_count 应为 1，得到 %d", pc)
 	}
 }
 
