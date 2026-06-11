@@ -13,13 +13,16 @@
       <!-- 左栏：歌单列表 + 新建 -->
       <div class="pl-left">
         <div class="pl-list">
-          <button
+          <div
             v-for="p in lists"
             :key="p.id"
             class="pl-list-row"
             :class="{ active: selected?.id === p.id }"
-            type="button"
+            role="button"
+            tabindex="0"
             @click="open(p.id)"
+            @keydown.enter="open(p.id)"
+            @keydown.space.prevent="open(p.id)"
           >
             <span class="pl-list-name">{{ p.name }}</span>
             <span class="pl-list-count muted">{{ p.song_count }} 首</span>
@@ -37,7 +40,7 @@
                 @click.stop="remove(p)"
               >✕</button>
             </span>
-          </button>
+          </div>
           <div v-if="lists.length === 0" class="muted pl-empty">暂无歌单</div>
         </div>
 

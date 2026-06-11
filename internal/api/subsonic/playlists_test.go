@@ -91,3 +91,33 @@ func TestUpdatePlaylist_AddAndRemove(t *testing.T) {
 		t.Errorf("删下标 0 后应剩 t2,t3: %v", ids)
 	}
 }
+
+func TestPlaylist_NotOwnerCannotMutate(t *testing.T) {
+	h, _ := testHandler(t)
+	seed(t, h.db)
+	id := seedPlaylist(t, h) // admin 的歌单，含 t1
+	// 建普通用户 bob
+	hash, _ := authHashForTest(t)
+	bob, _ := h.users.Create("bob", hash, false)
+	enc, _ := encForTest(h, "bobpw")
+	h.users.UpdateSubsonicPW(bob.ID, enc)
+
+	// bob 删 admin 的歌单 → 70，且歌单仍在
+	w := doReq(t, h, "/rest/deletePlaylist?u=bob&p=bobpw&id="+id+"&f=json")
+	if !strings.Contains(w.Body.String(), `"code":70`) {
+		t.Errorf("bob 删他人歌单应 70: %s", w.Body.String())
+	}
+	var n int
+	h.db.QueryRow(`SELECT COUNT(*) FROM playlists WHERE id=?`, id).Scan(&n)
+	if n != 1 {
+		t.Errorf("admin 的歌单不应被删除，剩 %d", n)
+	}
+	// bob 改 admin 的歌单（加曲）→ 70，且曲目数不变
+	doReq(t, h, "/rest/updatePlaylist?u=bob&p=bobpw&playlistId="+id+"&songIdToAdd=t2&f=json")
+	var adminID string
+	h.db.QueryRow(`SELECT id FROM users WHERE username='admin'`).Scan(&adminID)
+	ids, _ := h.pl.TrackIDs(adminID, id)
+	if len(ids) != 1 {
+		t.Errorf("bob 不应能改 admin 歌单曲目，曲目数=%d", len(ids))
+	}
+}
