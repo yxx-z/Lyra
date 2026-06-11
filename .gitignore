@@ -21,3 +21,6 @@ data/
 # 本地专属开发配置与音乐测试包
 /config.yaml
 /music/
+
+# 自动生成的 AES 主密钥（测试/运行时可能落在工作区任意位置）
+secret.key
