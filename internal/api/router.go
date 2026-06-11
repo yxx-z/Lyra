@@ -42,16 +42,21 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 	}
 	users := auth.NewUserStore(db)
 	sessions := auth.NewSessionStore(db)
+	settings := auth.NewSettingsStore(db)
 
 	r.Get("/health", handleHealth)
 
 	authH := v1.NewAuthHandler(users, sessions)
 	setupH := v1.NewSetupHandler(users, sessions, db)
 	accountH := v1.NewAccountHandler(users, key)
+	adminH := v1.NewAdminHandler(users, settings)
+	registerH := v1.NewRegisterHandler(users, sessions, settings)
 	r.Post("/api/v1/auth/login", authH.Login)
 	r.Post("/api/v1/auth/logout", authH.Logout)
 	r.Get("/api/v1/setup/status", setupH.Status)
 	r.Post("/api/v1/setup", setupH.Create)
+	r.Get("/api/v1/register/status", registerH.Status)
+	r.Post("/api/v1/register", registerH.Register)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(middleware.SessionAuth(sessions, users, cfg.Auth.Disable))
@@ -60,6 +65,17 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 		r.Post("/auth/session", authH.Session)
 		r.Post("/account/password", accountH.ChangePassword)
 		r.Post("/account/subsonic-password", accountH.SetSubsonicPassword)
+
+		r.Route("/admin", func(r chi.Router) {
+			r.Use(middleware.RequireAdmin)
+			r.Get("/users", adminH.ListUsers)
+			r.Post("/users", adminH.CreateUser)
+			r.Delete("/users/{id}", adminH.DeleteUser)
+			r.Post("/users/{id}/password", adminH.ResetPassword)
+			r.Post("/users/{id}/role", adminH.SetRole)
+			r.Get("/settings", adminH.GetSettings)
+			r.Post("/settings", adminH.SetSettings)
+		})
 
 		lib := v1.NewLibraryHandler(s)
 		r.Post("/library/scan", lib.TriggerScan)
