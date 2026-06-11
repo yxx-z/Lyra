@@ -5,13 +5,21 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/yxx-z/lyra/internal/api/middleware"
+	"github.com/yxx-z/lyra/internal/auth"
+	"github.com/yxx-z/lyra/internal/db"
+	"github.com/yxx-z/lyra/internal/userdata"
 )
 
 func TestListAlbums_ReturnsAlbums(t *testing.T) {
 	d := newTestDB(t)
 	insertTestData(t, d)
-	h := NewAlbumsHandler(d)
+	h := NewAlbumsHandler(d, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/albums", nil)
 	w := httptest.NewRecorder()
@@ -41,7 +49,7 @@ func TestListAlbums_ReturnsAlbums(t *testing.T) {
 func TestGetAlbum_ReturnsTracks(t *testing.T) {
 	d := newTestDB(t)
 	insertTestData(t, d)
-	h := NewAlbumsHandler(d)
+	h := NewAlbumsHandler(d, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/albums/al1", nil)
 	w := httptest.NewRecorder()
@@ -63,7 +71,7 @@ func TestGetAlbum_ReturnsTracks(t *testing.T) {
 
 func TestGetAlbum_NotFound(t *testing.T) {
 	d := newTestDB(t)
-	h := NewAlbumsHandler(d)
+	h := NewAlbumsHandler(d, nil)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/albums/nonexistent", nil)
@@ -87,7 +95,7 @@ func TestGetAlbum_ReturnsGenreAndReleaseDate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := NewAlbumsHandler(d)
+	h := NewAlbumsHandler(d, nil)
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/albums/al", nil)
 	h.getAlbum(w, req, "al")
@@ -107,5 +115,32 @@ func TestGetAlbum_ReturnsGenreAndReleaseDate(t *testing.T) {
 	}
 	if resp.Year != 2003 {
 		t.Errorf("Year = %d, want 2003（应能从完整日期派生）", resp.Year)
+	}
+}
+
+func TestAlbums_StarredFlag(t *testing.T) {
+	d, err := db.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	d.Exec(`INSERT INTO albums(id,title) VALUES('al1','专辑')`)
+	store := userdata.NewStore(d)
+	us := auth.NewUserStore(d)
+	ss := auth.NewSessionStore(d)
+	u, _ := us.Create("admin", mustHashFav(t, "pw"), true)
+	store.Star(u.ID, userdata.TypeAlbum, "al1")
+
+	h := NewAlbumsHandler(d, store)
+	token, _ := ss.Create(u.ID, time.Hour)
+	r := chi.NewRouter()
+	r.Use(middleware.SessionAuth(ss, us, false))
+	r.Get("/albums", h.ListAlbums)
+	req := httptest.NewRequest("GET", "/albums", nil)
+	req.AddCookie(&http.Cookie{Name: "lyra_auth", Value: token})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if !strings.Contains(w.Body.String(), `"starred":true`) {
+		t.Errorf("已收藏专辑应含 starred:true: %s", w.Body.String())
 	}
 }

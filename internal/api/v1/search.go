@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+
+	"github.com/yxx-z/lyra/internal/api/middleware"
+	"github.com/yxx-z/lyra/internal/userdata"
 )
 
 // TrackResult is a search result for a track.
@@ -17,6 +20,7 @@ type TrackResult struct {
 	AlbumID   string `json:"album_id"`
 	Duration  int    `json:"duration"`
 	StreamURL string `json:"stream_url"`
+	Starred   bool   `json:"starred"`
 }
 
 // AlbumResult is a search result for an album.
@@ -25,6 +29,7 @@ type AlbumResult struct {
 	Title    string `json:"title"`
 	Artist   string `json:"artist"`
 	CoverURL string `json:"cover_url"`
+	Starred  bool   `json:"starred"`
 }
 
 // ArtistResult is a search result for an artist.
@@ -42,12 +47,13 @@ type SearchResponse struct {
 
 // SearchHandler handles GET /api/v1/search.
 type SearchHandler struct {
-	db *sql.DB
+	db    *sql.DB
+	store *userdata.Store
 }
 
-// NewSearchHandler creates a SearchHandler backed by db.
-func NewSearchHandler(db *sql.DB) *SearchHandler {
-	return &SearchHandler{db: db}
+// NewSearchHandler creates a SearchHandler backed by db and userdata store.
+func NewSearchHandler(db *sql.DB, store *userdata.Store) *SearchHandler {
+	return &SearchHandler{db: db, store: store}
 }
 
 // Search handles GET /api/v1/search?q=keyword.
@@ -68,6 +74,20 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	resp.Tracks = h.searchTracks(like)
 	resp.Albums = h.searchAlbums(like)
 	resp.Artists = h.searchArtists(like)
+
+	// 所有查询结果已收集完毕，再做 starred 标注，避免游标冲突。
+	if h.store != nil {
+		if u, ok := middleware.UserFromContext(r.Context()); ok {
+			sm, _ := h.store.StarredMap(u.ID, userdata.TypeSong)
+			for i := range resp.Tracks {
+				_, resp.Tracks[i].Starred = sm[resp.Tracks[i].ID]
+			}
+			am, _ := h.store.StarredMap(u.ID, userdata.TypeAlbum)
+			for i := range resp.Albums {
+				_, resp.Albums[i].Starred = am[resp.Albums[i].ID]
+			}
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {

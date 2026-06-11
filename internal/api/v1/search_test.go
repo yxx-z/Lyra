@@ -11,7 +11,7 @@ import (
 func TestSearch_FindsTrack(t *testing.T) {
 	d := newTestDB(t)
 	insertTestData(t, d)
-	h := NewSearchHandler(d)
+	h := NewSearchHandler(d, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=渡口", nil)
 	w := httptest.NewRecorder()
@@ -30,7 +30,7 @@ func TestSearch_FindsTrack(t *testing.T) {
 
 func TestSearch_EmptyQuery_Returns400(t *testing.T) {
 	d := newTestDB(t)
-	h := NewSearchHandler(d)
+	h := NewSearchHandler(d, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/search", nil)
 	w := httptest.NewRecorder()
 	h.Search(w, req)
@@ -42,7 +42,7 @@ func TestSearch_EmptyQuery_Returns400(t *testing.T) {
 func TestSearch_FindsArtist(t *testing.T) {
 	d := newTestDB(t)
 	insertTestData(t, d)
-	h := NewSearchHandler(d)
+	h := NewSearchHandler(d, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=蔡琴", nil)
 	w := httptest.NewRecorder()

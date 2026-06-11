@@ -10,6 +10,8 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/yxx-z/lyra/internal/api/middleware"
+	"github.com/yxx-z/lyra/internal/userdata"
 )
 
 // yearFromReleaseDate 取 release_date 前 4 位为年份；兼容 "2003" 与 "2003-07-31"。
@@ -32,6 +34,7 @@ type AlbumSummary struct {
 	ReleaseDate string `json:"release_date"`
 	TrackCount  int    `json:"track_count"`
 	CoverURL    string `json:"cover_url"`
+	Starred     bool   `json:"starred"`
 }
 
 // TrackSummary is returned inside an album detail.
@@ -44,6 +47,7 @@ type TrackSummary struct {
 	Format      string `json:"format"`
 	Bitrate     int    `json:"bitrate"`
 	StreamURL   string `json:"stream_url"`
+	Starred     bool   `json:"starred"`
 }
 
 // AlbumDetail is returned by the single album endpoint.
@@ -54,12 +58,13 @@ type AlbumDetail struct {
 
 // AlbumsHandler handles /api/v1/albums/* endpoints.
 type AlbumsHandler struct {
-	db *sql.DB
+	db    *sql.DB
+	store *userdata.Store
 }
 
-// NewAlbumsHandler creates an AlbumsHandler backed by db.
-func NewAlbumsHandler(db *sql.DB) *AlbumsHandler {
-	return &AlbumsHandler{db: db}
+// NewAlbumsHandler creates an AlbumsHandler backed by db and userdata store.
+func NewAlbumsHandler(db *sql.DB, store *userdata.Store) *AlbumsHandler {
+	return &AlbumsHandler{db: db, store: store}
 }
 
 // ListAlbums handles GET /api/v1/albums.
@@ -94,6 +99,16 @@ func (h *AlbumsHandler) ListAlbums(w http.ResponseWriter, r *http.Request) {
 	if err := rows.Err(); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "查询失败")
 		return
+	}
+
+	// rows 已关闭后再查 starred，避免 modernc 单连接约束下的游标冲突。
+	if h.store != nil {
+		if u, ok := middleware.UserFromContext(r.Context()); ok {
+			am, _ := h.store.StarredMap(u.ID, userdata.TypeAlbum)
+			for i := range albums {
+				_, albums[i].Starred = am[albums[i].ID]
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -153,6 +168,21 @@ func (h *AlbumsHandler) getAlbum(w http.ResponseWriter, r *http.Request, id stri
 	if err := rows.Err(); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "查询曲目失败")
 		return
+	}
+	// 显式关闭 rows，确保下方 StarredMap 可复用连接。
+	rows.Close()
+
+	// rows 已关闭后再查 starred，避免 modernc 单连接约束下的游标冲突。
+	if h.store != nil {
+		if u, ok := middleware.UserFromContext(r.Context()); ok {
+			am, _ := h.store.StarredMap(u.ID, userdata.TypeAlbum)
+			_, al.Starred = am[al.ID]
+
+			sm, _ := h.store.StarredMap(u.ID, userdata.TypeSong)
+			for i := range al.Tracks {
+				_, al.Tracks[i].Starred = sm[al.Tracks[i].ID]
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
