@@ -159,3 +159,27 @@ func TestOpen_HasFavoritesAndPlayStats(t *testing.T) {
 		t.Errorf("play_stats 表应可写: %v", err)
 	}
 }
+
+func TestOpen_PlaylistsHaveUserIDAndCascade(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer db.Close()
+	db.Exec(`INSERT INTO users(id,username,password_hash) VALUES('u1','u1','h')`)
+	db.Exec(`INSERT INTO tracks(id,title,file_path) VALUES('t1','x','p1')`)
+	if _, err := db.Exec(`INSERT INTO playlists(id,user_id,name) VALUES('p1','u1','我的歌单')`); err != nil {
+		t.Fatalf("playlists 应有 user_id 列: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO playlist_tracks(playlist_id,track_id,position) VALUES('p1','t1',0)`); err != nil {
+		t.Fatalf("playlist_tracks 写入: %v", err)
+	}
+	if _, err := db.Exec(`DELETE FROM playlists WHERE id='p1'`); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id='p1'`).Scan(&n)
+	if n != 0 {
+		t.Errorf("删歌单应级联清曲目，剩 %d", n)
+	}
+}

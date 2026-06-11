@@ -61,14 +61,17 @@ CREATE INDEX idx_lyrics_sync_checked ON lyrics(sync_checked);
 
 CREATE TABLE playlists (
     id         TEXT PRIMARY KEY,
+    user_id    TEXT REFERENCES users(id) ON DELETE CASCADE,
     name       TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    comment    TEXT NOT NULL DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE playlist_tracks (
     id          INTEGER PRIMARY KEY,
-    playlist_id TEXT NOT NULL REFERENCES playlists(id),
-    track_id    TEXT NOT NULL REFERENCES tracks(id),
+    playlist_id TEXT NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+    track_id    TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
     position    INTEGER NOT NULL
 );
 CREATE UNIQUE INDEX idx_playlist_tracks_pos ON playlist_tracks(playlist_id, position);
