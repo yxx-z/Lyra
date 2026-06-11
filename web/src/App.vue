@@ -105,6 +105,13 @@
         @play-track="onFavPlay"
       />
 
+      <!-- 模块 F: 歌单页（列表/新建/详情/改名/删除/移除/拖拽重排） -->
+      <PlaylistsPage
+        v-else-if="mode === 'playlists'"
+        :api="api"
+        @play-track="onFavPlay"
+      />
+
       <!-- 模块 E: 设置页（账户设置 + 用户管理） -->
       <SettingsPage
         v-else-if="mode === 'settings'"
@@ -159,6 +166,7 @@ import AlbumDetail from './components/AlbumDetail.vue'
 import AlbumGrid from './components/AlbumGrid.vue'
 import ArtistBrowser from './components/ArtistBrowser.vue'
 import FavoritesPanel from './components/FavoritesPanel.vue'
+import PlaylistsPage from './components/PlaylistsPage.vue'
 import LibraryShell from './components/LibraryShell.vue'
 import LoginView from './components/LoginView.vue'
 import LyricsPanel from './components/LyricsPanel.vue'
