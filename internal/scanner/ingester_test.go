@@ -69,6 +69,25 @@ func TestIngest_Dedup_SameArtistCaseInsensitive(t *testing.T) {
 	}
 }
 
+// 复现 bug：专辑名含大写罗马数字 Ⅱ(U+2161) 时，每次扫描都新建重复专辑。
+// 根因：Go strings.ToLower 会把 Ⅱ→ⅱ，而 SQLite lower() 只小写 ASCII、保留 Ⅱ，
+// 导致 findOrCreateAlbum 的 lower(trim(title)) 比较永远不相等。
+func TestIngest_Dedup_AlbumWithRomanNumeral(t *testing.T) {
+	d := newTestDB(t)
+	ing := NewIngester(d)
+
+	const album = "阿梨粤《难得有情人 （头版限量编号HQⅡ）》 2021天艺唱片"
+	// 同一专辑的两首曲目（不同文件），也等价于对同一文件重复扫描
+	ing.Ingest(TrackMeta{FilePath: "/music/x/01.flac", Title: "难得有情人", Artist: "阿梨粤", Album: album, Year: 2021})
+	ing.Ingest(TrackMeta{FilePath: "/music/x/02.flac", Title: "其二", Artist: "阿梨粤", Album: album, Year: 2021})
+
+	var count int
+	d.QueryRow(`SELECT count(*) FROM albums`).Scan(&count)
+	if count != 1 {
+		t.Errorf("albums: want 1 (deduped), got %d", count)
+	}
+}
+
 func TestIngest_Upsert_SameFilePath(t *testing.T) {
 	d := newTestDB(t)
 	ing := NewIngester(d)

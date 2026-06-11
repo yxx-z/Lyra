@@ -63,10 +63,18 @@ func (ing *Ingester) MarkUnavailable(filePath string) error {
 	return err
 }
 
-// normalize lowercases and trims leading/trailing whitespace for dedup comparisons.
-// Internal spaces are preserved: "AC DC" and "ACDC" remain distinct.
+// normalize 为去重比较做归一：去首尾空白 + 仅小写 ASCII A–Z。
+// 必须与 SQL 端 lower()（SQLite 内置 lower 只处理 ASCII）保持一致——
+// 不能用 strings.ToLower：它会把 Unicode 大写也小写（如罗马数字 Ⅱ→ⅱ），
+// 而 SQLite lower() 保留 Ⅱ，两边不一致会导致含此类字符的专辑/艺术家每次扫描都新建重复行。
+// 内部空格保留："AC DC" 与 "ACDC" 仍视为不同。
 func normalize(s string) string {
-	return strings.ToLower(strings.TrimSpace(s))
+	return strings.Map(func(r rune) rune {
+		if r >= 'A' && r <= 'Z' {
+			return r + ('a' - 'A')
+		}
+		return r
+	}, strings.TrimSpace(s))
 }
 
 func (ing *Ingester) findOrCreateArtist(name string) (string, error) {
