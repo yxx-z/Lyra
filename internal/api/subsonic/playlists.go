@@ -3,6 +3,7 @@ package subsonic
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/yxx-z/lyra/internal/auth"
 	"github.com/yxx-z/lyra/internal/playlists"
@@ -57,4 +58,91 @@ func toPlaylistDTO(p playlists.Playlist, owner string, entries []Child) Playlist
 		Created: p.Created, Changed: p.Changed,
 		Entry: entries,
 	}
+}
+
+func (h *Handler) createPlaylist(w http.ResponseWriter, r *http.Request) {
+	u := userFromCtx(r.Context())
+	songIDs := r.Form["songId"]
+	id := r.Form.Get("playlistId")
+	if id != "" {
+		// playlistId 已存在：替换曲目
+		if err := h.pl.ReplaceTracks(u.ID, id, songIDs); err != nil {
+			if errors.Is(err, playlists.ErrNotFound) {
+				writeError(w, r, 70, "歌单不存在")
+			} else {
+				writeError(w, r, 0, "保存失败")
+			}
+			return
+		}
+	} else {
+		// 新建歌单
+		newID, err := h.pl.Create(u.ID, r.Form.Get("name"))
+		if err != nil {
+			writeError(w, r, 0, "创建失败")
+			return
+		}
+		if len(songIDs) > 0 {
+			_ = h.pl.ReplaceTracks(u.ID, newID, songIDs)
+		}
+		id = newID
+	}
+	h.writePlaylistWithSongs(w, r, u, id)
+}
+
+func (h *Handler) updatePlaylist(w http.ResponseWriter, r *http.Request) {
+	u := userFromCtx(r.Context())
+	id := r.Form.Get("playlistId")
+	// 更新元信息（名称/备注）
+	if name, comment := r.Form.Get("name"), r.Form.Get("comment"); name != "" || comment != "" {
+		if err := h.pl.UpdateMeta(u.ID, id, name, comment); err != nil {
+			if errors.Is(err, playlists.ErrNotFound) {
+				writeError(w, r, 70, "歌单不存在")
+			} else {
+				writeError(w, r, 0, "更新失败")
+			}
+			return
+		}
+	}
+	// 按下标删除曲目
+	if idxStrs := r.Form["songIndexToRemove"]; len(idxStrs) > 0 {
+		indices := make([]int, 0, len(idxStrs))
+		for _, s := range idxStrs {
+			if n, err := strconv.Atoi(s); err == nil {
+				indices = append(indices, n)
+			}
+		}
+		if err := h.pl.RemoveByIndices(u.ID, id, indices); err != nil {
+			if errors.Is(err, playlists.ErrNotFound) {
+				writeError(w, r, 70, "歌单不存在")
+			} else {
+				writeError(w, r, 0, "更新失败")
+			}
+			return
+		}
+	}
+	// 追加曲目
+	if add := r.Form["songIdToAdd"]; len(add) > 0 {
+		if err := h.pl.AddTracks(u.ID, id, add); err != nil {
+			if errors.Is(err, playlists.ErrNotFound) {
+				writeError(w, r, 70, "歌单不存在")
+			} else {
+				writeError(w, r, 0, "更新失败")
+			}
+			return
+		}
+	}
+	writeResponse(w, r, &Response{})
+}
+
+func (h *Handler) deletePlaylist(w http.ResponseWriter, r *http.Request) {
+	u := userFromCtx(r.Context())
+	if err := h.pl.Delete(u.ID, r.Form.Get("id")); err != nil {
+		if errors.Is(err, playlists.ErrNotFound) {
+			writeError(w, r, 70, "歌单不存在")
+		} else {
+			writeError(w, r, 0, "删除失败")
+		}
+		return
+	}
+	writeResponse(w, r, &Response{})
 }

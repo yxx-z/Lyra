@@ -107,6 +107,3 @@ func (h *Handler) getMusicFolders(w http.ResponseWriter, r *http.Request) {
 	}})
 }
 
-func (h *Handler) createPlaylist(w http.ResponseWriter, r *http.Request) { writeResponse(w, r, &Response{}) }
-func (h *Handler) updatePlaylist(w http.ResponseWriter, r *http.Request) { writeResponse(w, r, &Response{}) }
-func (h *Handler) deletePlaylist(w http.ResponseWriter, r *http.Request) { writeResponse(w, r, &Response{}) }

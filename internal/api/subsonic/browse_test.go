@@ -21,6 +21,9 @@ func seed(t *testing.T, d *sql.DB) {
 	if _, err := d.Exec(`INSERT INTO tracks(id,title,artist_id,album_id,track_number,disc_number,duration,file_path,format,bitrate,is_available) VALUES('t2','晴天','ar1','al1',3,1,269,'/m/3.m4a','m4a',320,1)`); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := d.Exec(`INSERT INTO tracks(id,title,artist_id,album_id,track_number,disc_number,duration,file_path,format,bitrate,is_available) VALUES('t3','七里香','ar1','al1',4,1,245,'/m/4.m4a','m4a',320,1)`); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestGetArtists(t *testing.T) {
@@ -48,8 +51,8 @@ func TestGetAlbum(t *testing.T) {
 	seed(t, h.db)
 	w := doReq(t, h, "/rest/getAlbum?u=admin&p=secret&id=al1&f=json")
 	b := w.Body.String()
-	if !strings.Contains(b, `"songCount":2`) || !strings.Contains(b, `以父之名`) || !strings.Contains(b, `晴天`) {
-		t.Errorf("getAlbum 应含 2 曲: %s", b)
+	if !strings.Contains(b, `"songCount":3`) || !strings.Contains(b, `以父之名`) || !strings.Contains(b, `晴天`) || !strings.Contains(b, `七里香`) {
+		t.Errorf("getAlbum 应含 3 曲: %s", b)
 	}
 }
 
