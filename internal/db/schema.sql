@@ -110,6 +110,11 @@ CREATE TABLE sessions (
 );
 CREATE INDEX idx_sessions_user ON sessions(user_id);
 
+CREATE TABLE app_settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
 CREATE INDEX idx_tracks_album         ON tracks(album_id);
 CREATE INDEX idx_tracks_artist        ON tracks(artist_id);
 CREATE INDEX idx_tracks_scrape_status ON tracks(scrape_status);

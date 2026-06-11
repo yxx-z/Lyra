@@ -124,3 +124,18 @@ func TestOpen_BookmarksAndQueueHaveUserID(t *testing.T) {
 		t.Errorf("play_queue 应有可空 user_id 列: %v", err)
 	}
 }
+
+func TestOpen_HasAppSettings(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer db.Close()
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type='table' AND name='app_settings'`).Scan(&n); err != nil || n != 1 {
+		t.Errorf("app_settings 表应存在 (n=%d err=%v)", n, err)
+	}
+	if _, err := db.Exec(`INSERT INTO app_settings(key,value) VALUES('allow_registration','1')`); err != nil {
+		t.Errorf("写 app_settings 失败: %v", err)
+	}
+}
