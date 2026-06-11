@@ -1,4 +1,4 @@
-export type ViewMode = 'albums' | 'artists' | 'scan' | 'favorites' | 'settings'
+export type ViewMode = 'albums' | 'artists' | 'scan' | 'favorites' | 'playlists' | 'settings'
 
 export type AlbumSummary = {
   id: string
@@ -139,6 +139,10 @@ export type AlbumScrapeResponse = {
   mbid?: string
   has_cover: boolean
 }
+
+// ── 歌单类型 ──────────────────────────────────────────────
+export type PlaylistSummary = { id: string; name: string; comment: string; song_count: number; duration: number; created: string; changed: string }
+export type PlaylistDetail = PlaylistSummary & { tracks: FavTrack[] }
 
 export type AdminUser = {
   id: string
@@ -398,6 +402,53 @@ export class ApiClient {
 
   getMostPlayed(): Promise<{ tracks: FavTrack[] }> {
     return this.request<{ tracks: FavTrack[] }>('/api/v1/most-played')
+  }
+
+  // ── 歌单 ──────────────────────────────────────────────
+  listPlaylists(): Promise<{ playlists: PlaylistSummary[] }> {
+    return this.request<{ playlists: PlaylistSummary[] }>('/api/v1/playlists')
+  }
+
+  createPlaylist(name: string): Promise<{ id: string }> {
+    return this.request<{ id: string }>('/api/v1/playlists', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  getPlaylist(id: string): Promise<PlaylistDetail> {
+    return this.request<PlaylistDetail>(`/api/v1/playlists/${encodeURIComponent(id)}`)
+  }
+
+  updatePlaylist(id: string, patch: { name?: string; comment?: string }): Promise<void> {
+    return this.request<void>(`/api/v1/playlists/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  deletePlaylist(id: string): Promise<void> {
+    return this.request<void>(`/api/v1/playlists/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    })
+  }
+
+  addToPlaylist(id: string, trackIds: string[]): Promise<void> {
+    return this.request<void>(`/api/v1/playlists/${encodeURIComponent(id)}/tracks`, {
+      method: 'POST',
+      body: JSON.stringify({ trackIds }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  setPlaylistTracks(id: string, trackIds: string[]): Promise<void> {
+    return this.request<void>(`/api/v1/playlists/${encodeURIComponent(id)}/tracks`, {
+      method: 'PUT',
+      body: JSON.stringify({ trackIds }),
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   private async request<T>(

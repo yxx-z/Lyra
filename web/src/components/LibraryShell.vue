@@ -135,6 +135,19 @@ const FavoritesIcon = () => h(
   ]
 )
 
+const PlaylistsIcon = () => h(
+  'svg',
+  { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+  [
+    h('line', { x1: '8', y1: '6', x2: '21', y2: '6' }),
+    h('line', { x1: '8', y1: '12', x2: '21', y2: '12' }),
+    h('line', { x1: '8', y1: '18', x2: '15', y2: '18' }),
+    h('circle', { cx: '4', cy: '6', r: '1' }),
+    h('circle', { cx: '4', cy: '12', r: '1' }),
+    h('circle', { cx: '4', cy: '18', r: '1' })
+  ]
+)
+
 const SettingsIcon = () => h(
   'svg',
   { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
@@ -149,6 +162,7 @@ const navItems = [
   { mode: 'artists' as ViewMode, label: '歌手', iconComponent: ArtistsIcon },
   { mode: 'scan' as ViewMode, label: '系统扫描', iconComponent: ScanIcon },
   { mode: 'favorites' as ViewMode, label: '收藏', iconComponent: FavoritesIcon },
+  { mode: 'playlists' as ViewMode, label: '歌单', iconComponent: PlaylistsIcon },
   { mode: 'settings' as ViewMode, label: '设置', iconComponent: SettingsIcon },
 ]
 
@@ -156,6 +170,7 @@ const title = computed(() => {
   if (props.mode === 'artists') return 'ARTISTS'
   if (props.mode === 'scan') return 'SYSTEM SCANNER'
   if (props.mode === 'favorites') return 'FAVORITES'
+  if (props.mode === 'playlists') return 'PLAYLISTS'
   if (props.mode === 'settings') return 'SETTINGS'
   return 'LIBRARY'
 })
@@ -164,6 +179,7 @@ const heading = computed(() => {
   if (props.mode === 'artists') return '按歌手浏览'
   if (props.mode === 'scan') return '扫描与管理状态'
   if (props.mode === 'favorites') return '我的收藏'
+  if (props.mode === 'playlists') return '我的歌单'
   if (props.mode === 'settings') return '设置'
   return '我的专辑'
 })
