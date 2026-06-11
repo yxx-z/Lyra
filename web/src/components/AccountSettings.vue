@@ -1,15 +1,5 @@
 <template>
   <div class="account-settings">
-    <div class="account-settings-header">
-      <h2>账户设置</h2>
-      <button class="close-btn" type="button" @click="$emit('close')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      </button>
-    </div>
-
     <section class="settings-section">
       <h3>修改登录密码</h3>
       <div class="custom-form-group">
@@ -44,8 +34,6 @@ import { ref } from 'vue'
 import type { ApiClient } from '../api/client'
 
 const props = defineProps<{ api: ApiClient }>()
-
-defineEmits<{ (e: 'close'): void }>()
 
 const oldPw = ref('')
 const newPw = ref('')

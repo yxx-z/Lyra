@@ -1,16 +1,5 @@
 <template>
   <div class="account-settings">
-    <!-- 面板头部 -->
-    <div class="account-settings-header">
-      <h2>用户管理</h2>
-      <button class="close-btn" type="button" @click="$emit('close')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px;">
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      </button>
-    </div>
-
     <!-- 操作结果提示 -->
     <div v-if="statusMessage" :class="['status-message', statusIsError ? 'status-error' : 'status-ok']">
       {{ statusMessage }}
@@ -105,10 +94,6 @@ import type { ApiClient, AdminUser } from '../api/client'
 
 const props = defineProps<{
   api: ApiClient
-}>()
-
-const emit = defineEmits<{
-  (e: 'close'): void
 }>()
 
 const loading = ref(false)

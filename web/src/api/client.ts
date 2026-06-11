@@ -1,4 +1,4 @@
-export type ViewMode = 'albums' | 'artists' | 'scan'
+export type ViewMode = 'albums' | 'artists' | 'scan' | 'favorites' | 'settings'
 
 export type AlbumSummary = {
   id: string

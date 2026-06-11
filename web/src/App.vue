@@ -31,13 +31,9 @@
     <LibraryShell
       v-else
       :mode="mode"
-      :is-admin="currentUser?.isAdmin ?? false"
       @change-mode="changeMode"
       @refresh="refreshCurrentView"
       @logout="void logout()"
-      @open-settings="showSettings = true; showUsers = false; showFavorites = false"
-      @open-users="showUsers = true; showSettings = false; showFavorites = false"
-      @open-favorites="showFavorites = true; showSettings = false; showUsers = false"
       @search="runSearch"
     >
       <!-- 高品质手写浮动 Alert 提示栏 -->
@@ -58,31 +54,9 @@
         </button>
       </div>
 
-      <!-- 账户设置面板 -->
-      <AccountSettings
-        v-if="showSettings"
-        :api="api"
-        @close="showSettings = false"
-      />
-
-      <!-- 用户管理面板（仅管理员） -->
-      <UserManagement
-        v-if="showUsers"
-        :api="api"
-        @close="showUsers = false"
-      />
-
-      <!-- 收藏夹面板 -->
-      <FavoritesPanel
-        v-if="showFavorites"
-        :api="api"
-        @close="showFavorites = false"
-        @play-track="onFavPlay"
-      />
-
       <!-- 搜索展示面板 (最高优先级覆盖主面板) -->
       <SearchPanel
-        v-if="!showSettings && !showUsers && !showFavorites && searchQuery"
+        v-if="searchQuery"
         :query="searchQuery"
         :results="searchResults"
         :loading="searchLoading"
@@ -95,7 +69,7 @@
 
       <!-- 模块 A: 专辑库双栏侧滑交互 -->
       <div
-        v-else-if="!showSettings && !showUsers && !showFavorites && mode === 'albums'"
+        v-else-if="mode === 'albums'"
         :class="{ 'has-detail': selectedAlbum }"
         class="content-grid"
       >
@@ -116,7 +90,7 @@
 
       <!-- 模块 B: 歌手收纳展板 -->
       <ArtistBrowser
-        v-else-if="!showSettings && !showUsers && !showFavorites && mode === 'artists'"
+        v-else-if="mode === 'artists'"
         :artists="artists"
         :selected-artist="selectedArtist"
         @select-artist="selectArtist"
@@ -124,9 +98,23 @@
         @quick-play-album="playEntireAlbum"
       />
 
+      <!-- 模块 D: 收藏夹（我的收藏/最近播放/最常听） -->
+      <FavoritesPanel
+        v-else-if="mode === 'favorites'"
+        :api="api"
+        @play-track="onFavPlay"
+      />
+
+      <!-- 模块 E: 设置页（账户设置 + 用户管理） -->
+      <SettingsPage
+        v-else-if="mode === 'settings'"
+        :api="api"
+        :is-admin="currentUser?.isAdmin ?? false"
+      />
+
       <!-- 模块 C: 系统扫描管理 -->
       <ScanPanel
-        v-else-if="!showSettings && !showUsers && !showFavorites"
+        v-else-if="mode === 'scan'"
         :status="scanStatus"
         :triggering="scanTriggering"
         @trigger="triggerScan"
@@ -166,7 +154,7 @@ import type {
   TrackSummary,
   ViewMode,
 } from './api/client'
-import AccountSettings from './components/AccountSettings.vue'
+import SettingsPage from './components/SettingsPage.vue'
 import AlbumDetail from './components/AlbumDetail.vue'
 import AlbumGrid from './components/AlbumGrid.vue'
 import ArtistBrowser from './components/ArtistBrowser.vue'
@@ -179,7 +167,6 @@ import RegisterView from './components/RegisterView.vue'
 import ScanPanel from './components/ScanPanel.vue'
 import SearchPanel from './components/SearchPanel.vue'
 import SetupView from './components/SetupView.vue'
-import UserManagement from './components/UserManagement.vue'
 
 // 引入全局音频 Store
 const playerStore = usePlayerStore()
@@ -196,15 +183,6 @@ const globalError = ref('')
 const needsSetup = ref(false)
 const setupLoading = ref(false)
 const setupError = ref('')
-
-// 账户设置面板开关
-const showSettings = ref(false)
-
-// 用户管理面板开关（仅管理员）
-const showUsers = ref(false)
-
-// 收藏夹面板开关
-const showFavorites = ref(false)
 
 // 当前登录用户信息（用于识别角色）
 const currentUser = ref<{ username: string; isAdmin: boolean } | null>(null)
@@ -595,10 +573,8 @@ async function logout() {
   selectedAlbum.value = null
   selectedArtist.value = null
   isLyricsOpen.value = false // 登出时自动收折歌词面板
-  showSettings.value = false // 登出时关闭账户设置面板
   currentUser.value = null
-  showUsers.value = false
-  showFavorites.value = false
+  mode.value = 'albums' // 登出后回到默认视图
   showRegister.value = false
   playerStore.$reset() // 清空全局播放状态
 }

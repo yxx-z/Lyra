@@ -21,45 +21,8 @@
         </nav>
       </div>
 
-      <!-- 账户设置与登出按钮归纳至侧边栏底部 -->
+      <!-- 登出归纳至侧边栏底部（收藏/设置已上移为垂直导航项） -->
       <div class="logout-nav-container">
-        <!-- 收藏夹（所有已登录用户可见） -->
-        <button
-          class="logout-nav-button"
-          title="收藏"
-          type="button"
-          @click="$emit('open-favorites')"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-          </svg>
-        </button>
-        <!-- 用户管理（仅管理员可见） -->
-        <button
-          v-if="isAdmin"
-          class="logout-nav-button"
-          title="用户管理"
-          type="button"
-          @click="$emit('open-users')"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-            <circle cx="9" cy="7" r="4" />
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-          </svg>
-        </button>
-        <button
-          class="logout-nav-button"
-          title="账户设置"
-          type="button"
-          @click="$emit('open-settings')"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="8" r="4" />
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-          </svg>
-        </button>
         <button
           class="logout-nav-button"
           title="退出登录"
@@ -121,20 +84,14 @@
 import { computed, ref, h } from 'vue'
 import type { ViewMode } from '../api/client'
 
-const props = withDefaults(defineProps<{
+const props = defineProps<{
   mode: ViewMode
-  isAdmin?: boolean
-}>(), {
-  isAdmin: false,
-})
+}>()
 
 const emit = defineEmits<{
   'change-mode': [mode: ViewMode]
   refresh: []
   logout: []
-  'open-settings': []
-  'open-users': []
-  'open-favorites': []
   search: [query: string]
 }>()
 
@@ -170,21 +127,44 @@ const ScanIcon = () => h(
   ]
 )
 
+const FavoritesIcon = () => h(
+  'svg',
+  { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+  [
+    h('path', { d: 'M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z' })
+  ]
+)
+
+const SettingsIcon = () => h(
+  'svg',
+  { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+  [
+    h('circle', { cx: '12', cy: '12', r: '3' }),
+    h('path', { d: 'M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z' })
+  ]
+)
+
 const navItems = [
   { mode: 'albums' as ViewMode, label: '专辑', iconComponent: AlbumsIcon },
   { mode: 'artists' as ViewMode, label: '歌手', iconComponent: ArtistsIcon },
   { mode: 'scan' as ViewMode, label: '系统扫描', iconComponent: ScanIcon },
+  { mode: 'favorites' as ViewMode, label: '收藏', iconComponent: FavoritesIcon },
+  { mode: 'settings' as ViewMode, label: '设置', iconComponent: SettingsIcon },
 ]
 
 const title = computed(() => {
   if (props.mode === 'artists') return 'ARTISTS'
   if (props.mode === 'scan') return 'SYSTEM SCANNER'
+  if (props.mode === 'favorites') return 'FAVORITES'
+  if (props.mode === 'settings') return 'SETTINGS'
   return 'LIBRARY'
 })
 
 const heading = computed(() => {
   if (props.mode === 'artists') return '按歌手浏览'
   if (props.mode === 'scan') return '扫描与管理状态'
+  if (props.mode === 'favorites') return '我的收藏'
+  if (props.mode === 'settings') return '设置'
   return '我的专辑'
 })
 
