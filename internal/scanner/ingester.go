@@ -2,6 +2,7 @@
 package scanner
 
 import (
+	"bytes"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -9,9 +10,32 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/encoding/unicode"
 )
+
+// decodeToUTF8 把歌词文件字节统一转为 UTF-8。
+// 很多中文 .lrc 是 GBK/GB2312 编码，原样存库会在网页（按 UTF-8 渲染）显示乱码。
+// 策略：带 BOM 的 UTF-16 按 BOM 解；去掉 UTF-8 BOM；已是合法 UTF-8 则保留；
+// 否则按 GB18030（GBK/GB2312 的超集，覆盖几乎所有中文 .lrc）解码；实在失败原样返回。
+func decodeToUTF8(b []byte) string {
+	if len(b) >= 2 && ((b[0] == 0xFF && b[1] == 0xFE) || (b[0] == 0xFE && b[1] == 0xFF)) {
+		if out, err := unicode.UTF16(unicode.LittleEndian, unicode.UseBOM).NewDecoder().Bytes(b); err == nil {
+			return string(out)
+		}
+	}
+	b = bytes.TrimPrefix(b, []byte{0xEF, 0xBB, 0xBF})
+	if utf8.Valid(b) {
+		return string(b)
+	}
+	if out, err := simplifiedchinese.GB18030.NewDecoder().Bytes(b); err == nil {
+		return string(out)
+	}
+	return string(b)
+}
 
 // Ingester writes TrackMeta records to the database.
 type Ingester struct {
@@ -171,7 +195,8 @@ func (ing *Ingester) importSidecarLyrics(trackID, audioPath string) error {
 		}
 		return err
 	}
-	if strings.TrimSpace(string(content)) == "" {
+	lrc := decodeToUTF8(content)
+	if strings.TrimSpace(lrc) == "" {
 		return nil
 	}
 
@@ -183,7 +208,7 @@ func (ing *Ingester) importSidecarLyrics(trackID, audioPath string) error {
 			source=excluded.source,
 			updated_at=CURRENT_TIMESTAMP
 		WHERE lyrics.source = 'sidecar'`,
-		trackID, string(content),
+		trackID, lrc,
 	)
 	return err
 }

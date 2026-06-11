@@ -6,8 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/yxx-z/lyra/internal/db"
+	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
 func newTestDB(t *testing.T) *sql.DB {
@@ -159,6 +161,35 @@ func TestIngest_ImportsSidecarLyrics(t *testing.T) {
 	}
 	if source != "sidecar" {
 		t.Errorf("source: want sidecar, got %q", source)
+	}
+}
+
+func TestIngest_SidecarLyricsGBKToUTF8(t *testing.T) {
+	d := newTestDB(t)
+	ing := NewIngester(d)
+	dir := t.TempDir()
+	audio := filepath.Join(dir, "a.flac")
+	if err := os.WriteFile(audio, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	want := "[00:01.00]罗刹海市\n[00:03.00]那马户又鸟"
+	gbk, err := simplifiedchinese.GB18030.NewEncoder().Bytes([]byte(want))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "a.lrc"), gbk, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ing.Ingest(TrackMeta{FilePath: audio, Title: "罗刹海市", Artist: "刀郎", Album: "山歌寥哉"}); err != nil {
+		t.Fatalf("Ingest: %v", err)
+	}
+	var got string
+	d.QueryRow(`SELECT lrc_content FROM lyrics WHERE track_id=(SELECT id FROM tracks WHERE file_path=?)`, audio).Scan(&got)
+	if got != want {
+		t.Errorf("GBK 歌词应转 UTF-8：want %q got %q", want, got)
+	}
+	if !utf8.ValidString(got) {
+		t.Error("存库内容应为合法 UTF-8")
 	}
 }
 
