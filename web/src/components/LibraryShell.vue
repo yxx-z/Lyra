@@ -23,6 +23,21 @@
 
       <!-- 账户设置与登出按钮归纳至侧边栏底部 -->
       <div class="logout-nav-container">
+        <!-- 用户管理（仅管理员可见） -->
+        <button
+          v-if="isAdmin"
+          class="logout-nav-button"
+          title="用户管理"
+          type="button"
+          @click="$emit('open-users')"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+        </button>
         <button
           class="logout-nav-button"
           title="账户设置"
@@ -95,15 +110,19 @@
 import { computed, ref, h } from 'vue'
 import type { ViewMode } from '../api/client'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   mode: ViewMode
-}>()
+  isAdmin?: boolean
+}>(), {
+  isAdmin: false,
+})
 
 const emit = defineEmits<{
   'change-mode': [mode: ViewMode]
   refresh: []
   logout: []
   'open-settings': []
+  'open-users': []
   search: [query: string]
 }>()
 

@@ -40,6 +40,15 @@
         <button :disabled="loading" class="custom-btn-primary" type="submit">
           {{ loading ? '正在登入...' : '立即登录' }}
         </button>
+
+        <button
+          v-if="allowRegistration"
+          class="custom-btn-secondary"
+          type="button"
+          @click="$emit('register')"
+        >
+          没有账号？注册
+        </button>
       </form>
     </section>
   </main>
@@ -50,12 +59,16 @@ import { ref } from 'vue'
 
 const emit = defineEmits<{
   login: [payload: { username: string; password: string }]
+  register: []
 }>()
 
-defineProps<{
+withDefaults(defineProps<{
   loading: boolean
   error: string
-}>()
+  allowRegistration?: boolean
+}>(), {
+  allowRegistration: false,
+})
 
 const username = ref('admin')
 const password = ref('')

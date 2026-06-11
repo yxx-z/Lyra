@@ -118,6 +118,14 @@ export type AlbumScrapeResponse = {
   has_cover: boolean
 }
 
+export type AdminUser = {
+  id: string
+  username: string
+  isAdmin: boolean
+  hasSubsonicPassword: boolean
+  createdAt: string
+}
+
 export class ApiError extends Error {
   status: number
 
@@ -261,6 +269,70 @@ export class ApiClient {
   scrapeAlbum(albumId: string) {
     return this.request<AlbumScrapeResponse>(`/api/v1/albums/${encodeURIComponent(albumId)}/scrape`, {
       method: 'POST',
+    })
+  }
+
+  // ── 注册 ──────────────────────────────────────────────────
+  getRegisterStatus(): Promise<{ allowRegistration: boolean }> {
+    return this.request<{ allowRegistration: boolean }>('/api/v1/register/status', { auth: false })
+  }
+
+  async register(username: string, password: string): Promise<string> {
+    const data = await this.request<{ token: string }>('/api/v1/register', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+      headers: { 'Content-Type': 'application/json' },
+      auth: false,
+    })
+    this.token = data.token
+    return data.token
+  }
+
+  // ── 管理员：用户管理 ──────────────────────────────────────
+  listUsers(): Promise<{ users: AdminUser[] }> {
+    return this.request<{ users: AdminUser[] }>('/api/v1/admin/users')
+  }
+
+  createUser(username: string, password: string, isAdmin: boolean): Promise<void> {
+    return this.request<void>('/api/v1/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ username, password, isAdmin }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  deleteUser(id: string): Promise<void> {
+    return this.request<void>(`/api/v1/admin/users/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    })
+  }
+
+  resetUserPassword(id: string, password: string): Promise<void> {
+    return this.request<void>(`/api/v1/admin/users/${encodeURIComponent(id)}/password`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  setUserRole(id: string, isAdmin: boolean): Promise<void> {
+    return this.request<void>(`/api/v1/admin/users/${encodeURIComponent(id)}/role`, {
+      method: 'POST',
+      body: JSON.stringify({ isAdmin }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  // ── 管理员：全局设置 ──────────────────────────────────────
+  getAdminSettings(): Promise<{ allowRegistration: boolean }> {
+    return this.request<{ allowRegistration: boolean }>('/api/v1/admin/settings')
+  }
+
+  setAdminSettings(allowRegistration: boolean): Promise<void> {
+    return this.request<void>('/api/v1/admin/settings', {
+      method: 'POST',
+      body: JSON.stringify({ allowRegistration }),
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 

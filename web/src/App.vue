@@ -8,22 +8,35 @@
       @setup="handleSetup"
     />
 
-    <!-- 1. 登录模式 -->
+    <!-- 1a. 注册页（在登录页基础上展示） -->
+    <RegisterView
+      v-else-if="showLogin && showRegister"
+      :loading="registerLoading"
+      :error="registerError"
+      @register="handleRegister"
+      @back="showRegister = false"
+    />
+
+    <!-- 1b. 登录模式 -->
     <LoginView
       v-else-if="showLogin"
       :loading="loginLoading"
       :error="loginError"
+      :allow-registration="allowRegistration"
       @login="handleLogin"
+      @register="showRegister = true"
     />
 
     <!-- 2. 全局主系统 -->
     <LibraryShell
       v-else
       :mode="mode"
+      :is-admin="currentUser?.isAdmin ?? false"
       @change-mode="changeMode"
       @refresh="refreshCurrentView"
       @logout="void logout()"
-      @open-settings="showSettings = true"
+      @open-settings="showSettings = true; showUsers = false"
+      @open-users="showUsers = true; showSettings = false"
       @search="runSearch"
     >
       <!-- 高品质手写浮动 Alert 提示栏 -->
@@ -51,9 +64,16 @@
         @close="showSettings = false"
       />
 
+      <!-- 用户管理面板（仅管理员） -->
+      <UserManagement
+        v-if="showUsers"
+        :api="api"
+        @close="showUsers = false"
+      />
+
       <!-- 搜索展示面板 (最高优先级覆盖主面板) -->
       <SearchPanel
-        v-if="!showSettings && searchQuery"
+        v-if="!showSettings && !showUsers && searchQuery"
         :query="searchQuery"
         :results="searchResults"
         :loading="searchLoading"
@@ -65,7 +85,7 @@
 
       <!-- 模块 A: 专辑库双栏侧滑交互 -->
       <div
-        v-else-if="mode === 'albums'"
+        v-else-if="!showSettings && !showUsers && mode === 'albums'"
         :class="{ 'has-detail': selectedAlbum }"
         class="content-grid"
       >
@@ -86,7 +106,7 @@
 
       <!-- 模块 B: 歌手收纳展板 -->
       <ArtistBrowser
-        v-else-if="mode === 'artists'"
+        v-else-if="!showSettings && !showUsers && mode === 'artists'"
         :artists="artists"
         :selected-artist="selectedArtist"
         @select-artist="selectArtist"
@@ -96,7 +116,7 @@
 
       <!-- 模块 C: 系统扫描管理 -->
       <ScanPanel
-        v-else
+        v-else-if="!showSettings && !showUsers"
         :status="scanStatus"
         :triggering="scanTriggering"
         @trigger="triggerScan"
@@ -143,9 +163,11 @@ import LibraryShell from './components/LibraryShell.vue'
 import LoginView from './components/LoginView.vue'
 import LyricsPanel from './components/LyricsPanel.vue'
 import PlayerBar from './components/PlayerBar.vue'
+import RegisterView from './components/RegisterView.vue'
 import ScanPanel from './components/ScanPanel.vue'
 import SearchPanel from './components/SearchPanel.vue'
 import SetupView from './components/SetupView.vue'
+import UserManagement from './components/UserManagement.vue'
 
 // 引入全局音频 Store
 const playerStore = usePlayerStore()
@@ -165,6 +187,18 @@ const setupError = ref('')
 
 // 账户设置面板开关
 const showSettings = ref(false)
+
+// 用户管理面板开关（仅管理员）
+const showUsers = ref(false)
+
+// 当前登录用户信息（用于识别角色）
+const currentUser = ref<{ username: string; isAdmin: boolean } | null>(null)
+
+// 注册相关状态
+const allowRegistration = ref(false)
+const showRegister = ref(false)
+const registerLoading = ref(false)
+const registerError = ref('')
 
 // 沉浸式全屏歌词是否开启状态
 const isLyricsOpen = ref(false)
@@ -242,6 +276,13 @@ async function boot() {
     return
   }
 
+  // 无论是否登录，先获取注册开关状态
+  try {
+    allowRegistration.value = (await api.getRegisterStatus()).allowRegistration
+  } catch {
+    allowRegistration.value = false
+  }
+
   try {
     const response = await api.listAlbums()
     albums.value = response.albums
@@ -286,8 +327,30 @@ async function handleSetup(payload: { username: string; password: string }) {
   }
 }
 
+async function handleRegister(payload: { username: string; password: string }) {
+  registerLoading.value = true
+  registerError.value = ''
+  try {
+    const nextToken = await api.register(payload.username, payload.password)
+    tokenStorage.save(nextToken)
+    token.value = nextToken
+    showRegister.value = false
+    await loadInitialData()
+  } catch (error) {
+    registerError.value = messageFromError(error)
+  } finally {
+    registerLoading.value = false
+  }
+}
+
 async function loadInitialData() {
   await Promise.all([loadAlbums(), loadArtists(), loadScanStatus()])
+  // 获取当前用户角色信息（admin 判断用）
+  try {
+    currentUser.value = await api.getMe()
+  } catch {
+    currentUser.value = null
+  }
 }
 
 async function loadAlbums() {
@@ -495,6 +558,9 @@ async function logout() {
   selectedArtist.value = null
   isLyricsOpen.value = false // 登出时自动收折歌词面板
   showSettings.value = false // 登出时关闭账户设置面板
+  currentUser.value = null
+  showUsers.value = false
+  showRegister.value = false
   playerStore.$reset() // 清空全局播放状态
 }
 
