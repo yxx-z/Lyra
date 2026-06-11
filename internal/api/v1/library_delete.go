@@ -110,3 +110,53 @@ func writeDeleteResult(w http.ResponseWriter, r *http.Request, paths []string) {
 	}
 	writeJSON(w, map[string]any{"ok": true, "filesDeleted": filesDeleted, "fileErrors": fileErrors})
 }
+
+// DeleteArtist 处理 DELETE /api/v1/artists/{id}?deleteFiles=（管理员）。
+// 连带删除该歌手名下所有专辑与曲目。
+func (h *ArtistsHandler) DeleteArtist(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var exists string
+	if err := h.db.QueryRow(`SELECT id FROM artists WHERE id=?`, id).Scan(&exists); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	// 该歌手关联的曲目：artist_id 指向它，或其专辑下的曲目
+	ids, paths, err := collectTracks(h.db,
+		`SELECT id, file_path FROM tracks WHERE artist_id=? OR album_id IN (SELECT id FROM albums WHERE artist_id=?)`,
+		id, id)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "查询失败")
+		return
+	}
+	tx, err := h.db.Begin()
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "删除失败")
+		return
+	}
+	if err := deleteTracksByIDs(tx, ids); err != nil {
+		tx.Rollback()
+		writeJSONError(w, http.StatusInternalServerError, "删除失败")
+		return
+	}
+	stmts := []struct {
+		q    string
+		args []any
+	}{
+		{`DELETE FROM starred WHERE item_type='album' AND item_id IN (SELECT id FROM albums WHERE artist_id=?)`, []any{id}},
+		{`DELETE FROM albums WHERE artist_id=?`, []any{id}},
+		{`DELETE FROM starred WHERE item_type='artist' AND item_id=?`, []any{id}},
+		{`DELETE FROM artists WHERE id=?`, []any{id}},
+	}
+	for _, s := range stmts {
+		if _, err := tx.Exec(s.q, s.args...); err != nil {
+			tx.Rollback()
+			writeJSONError(w, http.StatusInternalServerError, "删除失败")
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "删除失败")
+		return
+	}
+	writeDeleteResult(w, r, paths)
+}

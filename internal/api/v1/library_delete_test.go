@@ -121,3 +121,37 @@ func TestDeleteAlbum_NotFound(t *testing.T) {
 		t.Errorf("不存在应 404: %d", w.Code)
 	}
 }
+
+func TestDeleteArtist_RemovesArtistAlbumsTracks(t *testing.T) {
+	d, _ := db.Open(":memory:")
+	defer d.Close()
+	d.Exec(`INSERT INTO artists(id,name) VALUES('ar1','歌手')`)
+	d.Exec(`INSERT INTO albums(id,title,artist_id) VALUES('al1','专辑A','ar1')`)
+	d.Exec(`INSERT INTO albums(id,title,artist_id) VALUES('al2','专辑B','ar1')`)
+	d.Exec(`INSERT INTO tracks(id,title,album_id,artist_id,file_path) VALUES('t1','歌1','al1','ar1','/x/1.flac')`)
+	d.Exec(`INSERT INTO tracks(id,title,album_id,artist_id,file_path) VALUES('t2','歌2','al2','ar1','/x/2.flac')`)
+	d.Exec(`INSERT INTO starred(user_id,item_type,item_id) VALUES('u1','artist','ar1')`)
+
+	h := NewArtistsHandler(d)
+	r := chi.NewRouter()
+	r.Delete("/artists/{id}", h.DeleteArtist)
+	req := httptest.NewRequest("DELETE", "/artists/ar1", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("删歌手应成功: %d %s", w.Code, w.Body.String())
+	}
+	c := func(q string) int { var n int; d.QueryRow(q).Scan(&n); return n }
+	if c(`SELECT COUNT(*) FROM artists WHERE id='ar1'`) != 0 {
+		t.Error("artist 应删除")
+	}
+	if c(`SELECT COUNT(*) FROM albums WHERE artist_id='ar1'`) != 0 {
+		t.Error("该歌手专辑应全删")
+	}
+	if c(`SELECT COUNT(*) FROM tracks WHERE id IN ('t1','t2')`) != 0 {
+		t.Error("该歌手曲目应全删")
+	}
+	if c(`SELECT COUNT(*) FROM starred WHERE item_type='artist' AND item_id='ar1'`) != 0 {
+		t.Error("starred(artist) 应清")
+	}
+}
