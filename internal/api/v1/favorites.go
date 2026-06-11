@@ -110,11 +110,12 @@ type favTrack struct {
 	CoverURL  string `json:"cover_url"`
 }
 
-func (h *StarHandler) queryTracks(ids []string) []favTrack {
+// tracksByIDs 按 id 列表批量查询曲目信息（供 PlaylistHandler 等复用）。
+func tracksByIDs(db *sql.DB, ids []string) []favTrack {
 	out := []favTrack{}
 	for _, id := range ids {
 		var ft favTrack
-		err := h.db.QueryRow(`
+		err := db.QueryRow(`
 			SELECT tr.id, tr.title, COALESCE(al.title,''), COALESCE(tr.album_id,''),
 			       COALESCE(ar.name,''), COALESCE(tr.duration,0)
 			FROM tracks tr
@@ -131,6 +132,8 @@ func (h *StarHandler) queryTracks(ids []string) []favTrack {
 	}
 	return out
 }
+
+func (h *StarHandler) queryTracks(ids []string) []favTrack { return tracksByIDs(h.db, ids) }
 
 type favAlbum struct {
 	ID       string `json:"id"`
