@@ -90,10 +90,12 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 		albums := v1.NewAlbumsHandler(db, udStore)
 		r.Get("/albums", albums.ListAlbums)
 		r.Get("/albums/{id}", albums.GetAlbum)
+		r.With(middleware.RequireAdmin).Delete("/albums/{id}", albums.DeleteAlbum)
 
 		artists := v1.NewArtistsHandler(db)
 		r.Get("/artists", artists.ListArtists)
 		r.Get("/artists/{id}", artists.GetArtist)
+		r.With(middleware.RequireAdmin).Delete("/artists/{id}", artists.DeleteArtist)
 
 		cover := v1.NewCoverHandler(db)
 		r.Get("/cover/{id}", cover.GetCover)
