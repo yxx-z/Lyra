@@ -100,6 +100,3 @@ func (h *Handler) getMusicFolders(w http.ResponseWriter, r *http.Request) {
 	}})
 }
 
-// star/unstar 临时桩，后续任务替换为真实实现。
-func (h *Handler) star(w http.ResponseWriter, r *http.Request)   { writeResponse(w, r, &Response{}) }
-func (h *Handler) unstar(w http.ResponseWriter, r *http.Request) { writeResponse(w, r, &Response{}) }
