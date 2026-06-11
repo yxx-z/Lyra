@@ -106,4 +106,3 @@ func (h *Handler) getMusicFolders(w http.ResponseWriter, r *http.Request) {
 		Folder: []MusicFolder{{ID: 0, Name: "Music"}},
 	}})
 }
-

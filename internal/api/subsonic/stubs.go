@@ -9,4 +9,3 @@ import "net/http"
 func (h *Handler) getGenres(w http.ResponseWriter, r *http.Request) {
 	writeResponse(w, r, &Response{Genres: &Genres{Genre: []Genre{}}})
 }
-

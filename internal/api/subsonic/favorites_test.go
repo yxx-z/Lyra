@@ -38,7 +38,7 @@ func TestStar_AlbumAndArtist(t *testing.T) {
 	}
 }
 
-func authHashForTest(t *testing.T) (string, error) { return auth.HashPassword("loginpw") }
+func authHashForTest(t *testing.T) (string, error)     { return auth.HashPassword("loginpw") }
 func encForTest(h *Handler, pw string) ([]byte, error) { return auth.Encrypt(h.key, pw) }
 
 func TestGetStarred2(t *testing.T) {
@@ -75,4 +75,3 @@ func TestGetSong_StarredAnnotation(t *testing.T) {
 		t.Errorf("已收藏歌曲 getSong 应含 starred 属性: %s", w.Body.String())
 	}
 }
-
