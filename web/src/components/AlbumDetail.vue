@@ -42,16 +42,26 @@
           <p class="muted" style="font-size: 12px; margin-top: 2px;">
             共收录 {{ album.tracks?.length || 0 }} 首高品质曲目
           </p>
-          <button
-            class="custom-btn-primary"
-            style="width: auto; padding: 8px 18px; font-size: 13px; margin-top: 12px; display: inline-flex; align-items: center; gap: 8px;"
-            type="button"
-            :disabled="scraping"
-            @click="handleScrape"
-          >
-            <span v-if="scraping" class="loading-spinner" aria-label="刮削中"></span>
-            <span>{{ scraping ? '刮削中…' : '🔍 刮削元数据' }}</span>
-          </button>
+          <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px;">
+            <button
+              class="custom-btn-primary"
+              style="width: auto; padding: 8px 18px; font-size: 13px; display: inline-flex; align-items: center; gap: 8px;"
+              type="button"
+              :disabled="scraping"
+              @click="handleScrape"
+            >
+              <span v-if="scraping" class="loading-spinner" aria-label="刮削中"></span>
+              <span>{{ scraping ? '刮削中…' : '🔍 刮削元数据' }}</span>
+            </button>
+            <!-- 专辑红心收藏按钮 -->
+            <button
+              class="heart-btn album-heart"
+              :class="{ starred: albumStarred }"
+              type="button"
+              :title="albumStarred ? '取消收藏专辑' : '收藏专辑'"
+              @click="toggleAlbumStar"
+            >{{ albumStarred ? '♥' : '♡' }}</button>
+          </div>
           <p v-if="scrapeMessage" class="muted" style="font-size: 12px; margin-top: 8px;">{{ scrapeMessage }}</p>
         </div>
       </div>
@@ -59,7 +69,7 @@
       <!-- 精美曲目列表 -->
       <div class="track-list">
         <button
-          v-for="track in album.tracks"
+          v-for="track in localTracks"
           :key="track.id"
           :class="{ active: playerStore.currentTrack?.trackId === track.id }"
           class="track-row"
@@ -83,16 +93,23 @@
           <!-- 中间：歌名与音质信息 -->
           <span class="track-title" :title="track.title">
             {{ track.title }}
-            <span 
-              v-if="track.format || track.bitrate" 
-              class="muted" 
+            <span
+              v-if="track.format || track.bitrate"
+              class="muted"
               style="font-size: 10px; font-weight: normal; margin-left: 6px; padding: 1px 4px; border-radius: 4px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.03);"
             >
               {{ track.format.toUpperCase() }} {{ Math.round(track.bitrate / 1000) }}K
             </span>
           </span>
 
-          <!-- 右侧：时长 -->
+          <!-- 右侧：红心 + 时长 -->
+          <button
+            class="heart-btn"
+            :class="{ starred: track.starred }"
+            type="button"
+            :title="track.starred ? '取消收藏' : '收藏'"
+            @click.stop="toggleTrackStar(track)"
+          >{{ track.starred ? '♥' : '♡' }}</button>
           <span class="track-duration">{{ formatDuration(track.duration) }}</span>
         </button>
       </div>
@@ -130,6 +147,12 @@ const scraping = ref(false)
 const scrapeMessage = ref('')
 const coverVersion = ref(0)
 
+// 本地可变曲目列表（保持 starred 状态可即时翻转）
+const localTracks = ref<TrackSummary[]>([])
+
+// 专辑级别收藏状态
+const albumStarred = ref(false)
+
 // 带版本号的封面 URL：刮削后 bump 版本强制浏览器重取（同 URL 否则命中缓存）
 const coverSrc = computed(() =>
   props.album ? `${props.album.cover_url}?v=${coverVersion.value}` : '',
@@ -160,11 +183,77 @@ async function handleScrape() {
   }
 }
 
+// 专辑红心切换
+async function toggleAlbumStar() {
+  if (!props.album) return
+  const next = !albumStarred.value
+  albumStarred.value = next
+  try {
+    if (next) {
+      await props.api.star('album', props.album.id)
+    } else {
+      await props.api.unstar('album', props.album.id)
+    }
+  } catch {
+    // 失败时回滚
+    albumStarred.value = !next
+  }
+}
+
+// 曲目红心切换
+async function toggleTrackStar(track: TrackSummary) {
+  const next = !track.starred
+  track.starred = next
+  try {
+    if (next) {
+      await props.api.star('song', track.id)
+    } else {
+      await props.api.unstar('song', track.id)
+    }
+  } catch {
+    // 失败时回滚
+    track.starred = !next
+  }
+}
+
 watch(
   () => props.album?.id,
   () => {
     coverBroken.value = false
     scrapeMessage.value = ''
+    // 同步本地曲目列表与专辑收藏状态
+    localTracks.value = props.album ? props.album.tracks.map(t => ({ ...t })) : []
+    albumStarred.value = props.album?.starred ?? false
   },
+  { immediate: true },
 )
 </script>
+
+<style scoped>
+/* 红心收藏按钮 */
+.heart-btn {
+  background: none;
+  border: none;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text-dim, rgba(255, 255, 255, 0.3));
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: color 0.15s, transform 0.1s;
+  flex-shrink: 0;
+}
+
+.heart-btn:hover {
+  color: var(--danger, #f87171);
+}
+
+.heart-btn.starred {
+  color: var(--danger, #f87171);
+}
+
+.heart-btn.album-heart {
+  font-size: 20px;
+  padding: 4px 6px;
+}
+</style>

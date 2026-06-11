@@ -37,11 +37,11 @@
     <!-- 检索成果 -->
     <div v-else class="search-results">
       <!-- 1. 单曲模块 -->
-      <div v-if="results.tracks.length">
+      <div v-if="localTracks.length">
         <p class="eyebrow" style="margin-bottom: 12px; font-weight: 700;">TRACKS / 单曲</p>
         <div style="display: flex; flex-direction: column; gap: 8px;">
           <button
-            v-for="track in results.tracks"
+            v-for="track in localTracks"
             :key="track.id"
             class="result-row"
             type="button"
@@ -57,19 +57,27 @@
                 {{ track.title }}
               </span>
             </div>
-            <span class="muted" style="font-size: 13px; margin-left: 16px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px;">
+            <span class="muted" style="font-size: 13px; margin-left: 16px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px;">
               {{ track.artist }} &middot; {{ track.album }}
             </span>
+            <!-- 曲目红心 -->
+            <button
+              class="heart-btn"
+              :class="{ starred: track.starred }"
+              type="button"
+              :title="track.starred ? '取消收藏' : '收藏'"
+              @click.stop="toggleTrackStar(track)"
+            >{{ track.starred ? '♥' : '♡' }}</button>
           </button>
         </div>
       </div>
 
       <!-- 2. 专辑模块 -->
-      <div v-if="results.albums.length" style="margin-top: 12px;">
+      <div v-if="localAlbums.length" style="margin-top: 12px;">
         <p class="eyebrow" style="margin-bottom: 12px; font-weight: 700;">ALBUMS / 专辑</p>
         <div style="display: flex; flex-direction: column; gap: 8px;">
           <button
-            v-for="album in results.albums"
+            v-for="album in localAlbums"
             :key="album.id"
             class="result-row"
             type="button"
@@ -84,9 +92,17 @@
                 {{ album.title }}
               </span>
             </div>
-            <span class="muted" style="font-size: 13px; margin-left: 16px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px;">
+            <span class="muted" style="font-size: 13px; margin-left: 16px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px;">
               {{ album.artist || '未知艺术家' }}
             </span>
+            <!-- 专辑红心 -->
+            <button
+              class="heart-btn"
+              :class="{ starred: album.starred }"
+              type="button"
+              :title="album.starred ? '取消收藏专辑' : '收藏专辑'"
+              @click.stop="toggleAlbumStar(album)"
+            >{{ album.starred ? '♥' : '♡' }}</button>
           </button>
         </div>
       </div>
@@ -120,13 +136,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import type { SearchResponse, TrackResult } from '../api/client'
+import { computed, ref, watch } from 'vue'
+import type { ApiClient, SearchResponse, TrackResult, AlbumResult } from '../api/client'
 
 const props = defineProps<{
   query: string
   results: SearchResponse
   loading: boolean
+  api: ApiClient
 }>()
 
 defineEmits<{
@@ -135,6 +152,49 @@ defineEmits<{
   'select-album': [id: string]
   'select-artist': [id: string]
 }>()
+
+// 本地可变列表，用于即时翻转 starred 状态
+const localTracks = ref<TrackResult[]>([])
+const localAlbums = ref<AlbumResult[]>([])
+
+watch(
+  () => props.results,
+  (r) => {
+    localTracks.value = r.tracks.map(t => ({ ...t }))
+    localAlbums.value = r.albums.map(a => ({ ...a }))
+  },
+  { immediate: true, deep: true },
+)
+
+// 曲目红心切换
+async function toggleTrackStar(track: TrackResult) {
+  const next = !track.starred
+  track.starred = next
+  try {
+    if (next) {
+      await props.api.star('song', track.id)
+    } else {
+      await props.api.unstar('song', track.id)
+    }
+  } catch {
+    track.starred = !next
+  }
+}
+
+// 专辑红心切换
+async function toggleAlbumStar(album: AlbumResult) {
+  const next = !album.starred
+  album.starred = next
+  try {
+    if (next) {
+      await props.api.star('album', album.id)
+    } else {
+      await props.api.unstar('album', album.id)
+    }
+  } catch {
+    album.starred = !next
+  }
+}
 
 const isEmpty = computed(() => {
   return (
@@ -152,5 +212,28 @@ const isEmpty = computed(() => {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* 红心收藏按钮 */
+.heart-btn {
+  background: none;
+  border: none;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text-dim, rgba(255, 255, 255, 0.3));
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.15s;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.heart-btn:hover {
+  color: var(--danger, #f87171);
+}
+
+.heart-btn.starred {
+  color: var(--danger, #f87171);
 }
 </style>

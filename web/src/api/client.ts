@@ -10,6 +10,7 @@ export type AlbumSummary = {
   release_date: string
   track_count: number
   cover_url: string
+  starred?: boolean
 }
 
 export type TrackSummary = {
@@ -21,6 +22,7 @@ export type TrackSummary = {
   format: string
   bitrate: number
   stream_url: string
+  starred?: boolean
 }
 
 export type AlbumDetail = AlbumSummary & {
@@ -47,9 +49,29 @@ export type TrackResult = {
   album_id: string
   duration: number
   stream_url: string
+  starred?: boolean
 }
 
 export type AlbumResult = {
+  id: string
+  title: string
+  artist: string
+  cover_url: string
+  starred?: boolean
+}
+
+export type FavTrack = {
+  id: string
+  title: string
+  album: string
+  album_id: string
+  artist: string
+  duration: number
+  stream_url: string
+  cover_url: string
+}
+
+export type FavAlbum = {
   id: string
   title: string
   artist: string
@@ -334,6 +356,41 @@ export class ApiClient {
       body: JSON.stringify({ allowRegistration }),
       headers: { 'Content-Type': 'application/json' },
     })
+  }
+
+  // ── 收藏与播放统计 ──────────────────────────────────────
+  star(type: 'song' | 'album' | 'artist', id: string): Promise<void> {
+    return this.request<void>('/api/v1/star', {
+      method: 'POST',
+      body: JSON.stringify({ type, id }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  unstar(type: 'song' | 'album' | 'artist', id: string): Promise<void> {
+    return this.request<void>('/api/v1/unstar', {
+      method: 'POST',
+      body: JSON.stringify({ type, id }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  scrobble(trackId: string): Promise<void> {
+    return this.request<void>(`/api/v1/tracks/${encodeURIComponent(trackId)}/scrobble`, {
+      method: 'POST',
+    })
+  }
+
+  getFavorites(): Promise<{ tracks: FavTrack[]; albums: FavAlbum[] }> {
+    return this.request<{ tracks: FavTrack[]; albums: FavAlbum[] }>('/api/v1/favorites')
+  }
+
+  getRecentlyPlayed(): Promise<{ tracks: FavTrack[] }> {
+    return this.request<{ tracks: FavTrack[] }>('/api/v1/recently-played')
+  }
+
+  getMostPlayed(): Promise<{ tracks: FavTrack[] }> {
+    return this.request<{ tracks: FavTrack[] }>('/api/v1/most-played')
   }
 
   private async request<T>(

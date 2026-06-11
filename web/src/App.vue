@@ -35,8 +35,9 @@
       @change-mode="changeMode"
       @refresh="refreshCurrentView"
       @logout="void logout()"
-      @open-settings="showSettings = true; showUsers = false"
-      @open-users="showUsers = true; showSettings = false"
+      @open-settings="showSettings = true; showUsers = false; showFavorites = false"
+      @open-users="showUsers = true; showSettings = false; showFavorites = false"
+      @open-favorites="showFavorites = true; showSettings = false; showUsers = false"
       @search="runSearch"
     >
       <!-- 高品质手写浮动 Alert 提示栏 -->
@@ -71,12 +72,21 @@
         @close="showUsers = false"
       />
 
+      <!-- 收藏夹面板 -->
+      <FavoritesPanel
+        v-if="showFavorites"
+        :api="api"
+        @close="showFavorites = false"
+        @play-track="onFavPlay"
+      />
+
       <!-- 搜索展示面板 (最高优先级覆盖主面板) -->
       <SearchPanel
-        v-if="!showSettings && !showUsers && searchQuery"
+        v-if="!showSettings && !showUsers && !showFavorites && searchQuery"
         :query="searchQuery"
         :results="searchResults"
         :loading="searchLoading"
+        :api="api"
         @close="closeSearch"
         @play-track="playSearchTrack"
         @select-album="selectAlbum"
@@ -85,7 +95,7 @@
 
       <!-- 模块 A: 专辑库双栏侧滑交互 -->
       <div
-        v-else-if="!showSettings && !showUsers && mode === 'albums'"
+        v-else-if="!showSettings && !showUsers && !showFavorites && mode === 'albums'"
         :class="{ 'has-detail': selectedAlbum }"
         class="content-grid"
       >
@@ -106,7 +116,7 @@
 
       <!-- 模块 B: 歌手收纳展板 -->
       <ArtistBrowser
-        v-else-if="!showSettings && !showUsers && mode === 'artists'"
+        v-else-if="!showSettings && !showUsers && !showFavorites && mode === 'artists'"
         :artists="artists"
         :selected-artist="selectedArtist"
         @select-artist="selectArtist"
@@ -116,7 +126,7 @@
 
       <!-- 模块 C: 系统扫描管理 -->
       <ScanPanel
-        v-else-if="!showSettings && !showUsers"
+        v-else-if="!showSettings && !showUsers && !showFavorites"
         :status="scanStatus"
         :triggering="scanTriggering"
         @trigger="triggerScan"
@@ -141,7 +151,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { usePlayerStore } from './stores/player'
 import { ApiClient, ApiError, tokenStorage } from './api/client'
 import type {
@@ -149,6 +159,7 @@ import type {
   AlbumSummary,
   ArtistDetail,
   ArtistSummary,
+  FavTrack,
   ScanStatus,
   SearchResponse,
   TrackResult,
@@ -159,6 +170,7 @@ import AccountSettings from './components/AccountSettings.vue'
 import AlbumDetail from './components/AlbumDetail.vue'
 import AlbumGrid from './components/AlbumGrid.vue'
 import ArtistBrowser from './components/ArtistBrowser.vue'
+import FavoritesPanel from './components/FavoritesPanel.vue'
 import LibraryShell from './components/LibraryShell.vue'
 import LoginView from './components/LoginView.vue'
 import LyricsPanel from './components/LyricsPanel.vue'
@@ -190,6 +202,9 @@ const showSettings = ref(false)
 
 // 用户管理面板开关（仅管理员）
 const showUsers = ref(false)
+
+// 收藏夹面板开关
+const showFavorites = ref(false)
 
 // 当前登录用户信息（用于识别角色）
 const currentUser = ref<{ username: string; isAdmin: boolean } | null>(null)
@@ -544,6 +559,29 @@ function playSearchTrack(track: TrackResult) {
   playerStore.playTrack(activeTrack, queue)
 }
 
+// 收藏夹曲目开播
+function onFavPlay(track: FavTrack) {
+  const item = {
+    trackId: track.id,
+    title: track.title,
+    artist: track.artist,
+    album: track.album,
+    streamUrl: track.stream_url,
+    coverUrl: track.cover_url,
+  }
+  playerStore.playTrack(item, [item])
+}
+
+// 播放 scrobble：当前曲目 id 变更时上报一次
+watch(
+  () => playerStore.currentTrack?.trackId,
+  (newId) => {
+    if (newId) {
+      void api.scrobble(newId)
+    }
+  },
+)
+
 async function logout() {
   try {
     await api.logout()
@@ -560,6 +598,7 @@ async function logout() {
   showSettings.value = false // 登出时关闭账户设置面板
   currentUser.value = null
   showUsers.value = false
+  showFavorites.value = false
   showRegister.value = false
   playerStore.$reset() // 清空全局播放状态
 }

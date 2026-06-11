@@ -23,6 +23,17 @@
 
       <!-- 账户设置与登出按钮归纳至侧边栏底部 -->
       <div class="logout-nav-container">
+        <!-- 收藏夹（所有已登录用户可见） -->
+        <button
+          class="logout-nav-button"
+          title="收藏"
+          type="button"
+          @click="$emit('open-favorites')"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+          </svg>
+        </button>
         <!-- 用户管理（仅管理员可见） -->
         <button
           v-if="isAdmin"
@@ -123,6 +134,7 @@ const emit = defineEmits<{
   logout: []
   'open-settings': []
   'open-users': []
+  'open-favorites': []
   search: [query: string]
 }>()
 
