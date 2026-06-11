@@ -8,6 +8,7 @@ import (
 	v1 "github.com/yxx-z/lyra/internal/api/v1"
 	"github.com/yxx-z/lyra/internal/auth"
 	"github.com/yxx-z/lyra/internal/config"
+	"github.com/yxx-z/lyra/internal/playlists"
 	"github.com/yxx-z/lyra/internal/userdata"
 )
 
@@ -20,11 +21,12 @@ type Handler struct {
 	users   *auth.UserStore
 	key     []byte
 	store   *userdata.Store
+	pl      *playlists.Store
 }
 
 // NewHandler 创建 Subsonic handler，复用 v1 的 stream/cover。
-func NewHandler(db *sql.DB, cfg *config.Config, stream *v1.StreamHandler, cover *v1.CoverHandler, users *auth.UserStore, key []byte, store *userdata.Store) *Handler {
-	return &Handler{db: db, cfg: cfg, streamH: stream, cover: cover, users: users, key: key, store: store}
+func NewHandler(db *sql.DB, cfg *config.Config, stream *v1.StreamHandler, cover *v1.CoverHandler, users *auth.UserStore, key []byte, store *userdata.Store, pl *playlists.Store) *Handler {
+	return &Handler{db: db, cfg: cfg, streamH: stream, cover: cover, users: users, key: key, store: store, pl: pl}
 }
 
 // reg 在 /rest 子路由上注册某端点的 /name 与 /name.view（GET+POST），套认证。
@@ -65,6 +67,11 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	h.reg(r, "deleteBookmark", h.deleteBookmark)
 	h.reg(r, "savePlayQueue", h.savePlayQueue)
 	h.reg(r, "getPlayQueue", h.getPlayQueue)
+	h.reg(r, "getPlaylists", h.getPlaylists)
+	h.reg(r, "getPlaylist", h.getPlaylist)
+	h.reg(r, "createPlaylist", h.createPlaylist)
+	h.reg(r, "updatePlaylist", h.updatePlaylist)
+	h.reg(r, "deletePlaylist", h.deletePlaylist)
 
 	// 兜底：任何未实现的 /rest 端点返回可解析的 Subsonic 错误封套，
 	// 而非 chi 默认的纯文本 404（后者会让 Subsonic 客户端 JSON 解析失败）。
@@ -99,3 +106,9 @@ func (h *Handler) getMusicFolders(w http.ResponseWriter, r *http.Request) {
 		Folder: []MusicFolder{{ID: 0, Name: "Music"}},
 	}})
 }
+
+func (h *Handler) getPlaylists(w http.ResponseWriter, r *http.Request)   { writeResponse(w, r, &Response{}) }
+func (h *Handler) getPlaylist(w http.ResponseWriter, r *http.Request)    { writeResponse(w, r, &Response{}) }
+func (h *Handler) createPlaylist(w http.ResponseWriter, r *http.Request) { writeResponse(w, r, &Response{}) }
+func (h *Handler) updatePlaylist(w http.ResponseWriter, r *http.Request) { writeResponse(w, r, &Response{}) }
+func (h *Handler) deletePlaylist(w http.ResponseWriter, r *http.Request) { writeResponse(w, r, &Response{}) }

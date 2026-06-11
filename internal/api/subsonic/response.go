@@ -37,6 +37,8 @@ type Response struct {
 	Starred2      *Starred2      `xml:"starred2,omitempty" json:"starred2,omitempty"`
 	Bookmarks     *Bookmarks     `xml:"bookmarks,omitempty" json:"bookmarks,omitempty"`
 	PlayQueue     *PlayQueue     `xml:"playQueue,omitempty" json:"playQueue,omitempty"`
+	Playlists     *Playlists     `xml:"playlists,omitempty" json:"playlists,omitempty"`
+	Playlist      *Playlist      `xml:"playlist,omitempty" json:"playlist,omitempty"`
 }
 
 // 以下为第一期未实现、但客户端（Symfonium 等）启动时会探测的端点的空容器，
@@ -71,6 +73,21 @@ type PlayQueue struct {
 	Username  string  `xml:"username,attr" json:"username"`
 	Changed   string  `xml:"changed,attr" json:"changed"`
 	ChangedBy string  `xml:"changedBy,attr,omitempty" json:"changedBy,omitempty"`
+	Entry     []Child `xml:"entry,omitempty" json:"entry,omitempty"`
+}
+type Playlists struct {
+	Playlist []Playlist `xml:"playlist" json:"playlist"`
+}
+type Playlist struct {
+	ID        string  `xml:"id,attr" json:"id"`
+	Name      string  `xml:"name,attr" json:"name"`
+	Comment   string  `xml:"comment,attr,omitempty" json:"comment,omitempty"`
+	Owner     string  `xml:"owner,attr" json:"owner"`
+	Public    bool    `xml:"public,attr" json:"public"`
+	SongCount int     `xml:"songCount,attr" json:"songCount"`
+	Duration  int     `xml:"duration,attr" json:"duration"`
+	Created   string  `xml:"created,attr" json:"created"`
+	Changed   string  `xml:"changed,attr" json:"changed"`
 	Entry     []Child `xml:"entry,omitempty" json:"entry,omitempty"`
 }
 

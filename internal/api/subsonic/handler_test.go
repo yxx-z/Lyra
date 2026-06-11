@@ -10,6 +10,7 @@ import (
 	"github.com/yxx-z/lyra/internal/auth"
 	"github.com/yxx-z/lyra/internal/config"
 	"github.com/yxx-z/lyra/internal/db"
+	"github.com/yxx-z/lyra/internal/playlists"
 	"github.com/yxx-z/lyra/internal/transcode"
 	"github.com/yxx-z/lyra/internal/userdata"
 )
@@ -36,7 +37,8 @@ func testHandler(t *testing.T) (*Handler, *config.Config) {
 	stream := v1.NewStreamHandler(d, tsvc)
 	cover := v1.NewCoverHandler(d)
 	store := userdata.NewStore(d)
-	return NewHandler(d, cfg, stream, cover, users, key, store), cfg
+	pl := playlists.NewStore(d)
+	return NewHandler(d, cfg, stream, cover, users, key, store, pl), cfg
 }
 
 // doReq 走完整 chi 路由（含认证中间件）。
