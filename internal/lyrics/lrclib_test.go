@@ -129,3 +129,42 @@ func TestLRCLIBClientFetch_RejectsMissingDuration(t *testing.T) {
 		t.Fatalf("want ErrInvalidQuery, got %v", err)
 	}
 }
+
+func TestLRCLIBClientSearch_ReturnsCandidates(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/search" {
+			t.Fatalf("path: want /api/search, got %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("track_name") != "罗刹海市" {
+			t.Errorf("track_name: got %q", r.URL.Query().Get("track_name"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+			{"id":1,"trackName":"罗刹海市","artistName":"刀郎","albumName":"山歌寥哉","duration":268,"instrumental":false,"plainLyrics":"那马户又鸟","syncedLyrics":"[00:01.00]那马户又鸟"},
+			{"id":2,"trackName":"罗刹海市(伴奏)","artistName":"刀郎","albumName":"山歌寥哉","duration":268,"instrumental":true,"plainLyrics":"","syncedLyrics":""}
+		]`))
+	}))
+	defer server.Close()
+
+	c := NewLRCLIBClient(server.URL, "", nil)
+	cands, err := c.Search(context.Background(), "罗刹海市", "刀郎", "山歌寥哉")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(cands) != 2 {
+		t.Fatalf("want 2 candidates, got %d", len(cands))
+	}
+	if cands[0].TrackName != "罗刹海市" || cands[0].Duration != 268 || cands[0].SyncedLyrics == "" {
+		t.Errorf("候选0 解析不符: %+v", cands[0])
+	}
+	if !cands[1].Instrumental {
+		t.Errorf("候选1 应为器乐")
+	}
+}
+
+func TestLRCLIBClientSearch_EmptyQuery(t *testing.T) {
+	c := NewLRCLIBClient("http://example.invalid", "", nil)
+	if _, err := c.Search(context.Background(), "", "", ""); !errors.Is(err, ErrInvalidQuery) {
+		t.Errorf("空参应 ErrInvalidQuery, got %v", err)
+	}
+}
