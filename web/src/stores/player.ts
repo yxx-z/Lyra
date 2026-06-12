@@ -173,10 +173,10 @@ export const usePlayerStore = defineStore('player', () => {
   // 6. 队列内拖拽重排：用对象引用重定位 currentIndex，保证正在播的曲不被打断。
   function moveInQueue(from: number, to: number) {
     if (from < 0 || from >= queue.value.length || to < 0 || to >= queue.value.length || from === to) return
-    const cur = queue.value[currentIndex.value]
+    const cur = currentIndex.value >= 0 ? queue.value[currentIndex.value] : undefined
     const [moved] = queue.value.splice(from, 1)
     queue.value.splice(to, 0, moved)
-    currentIndex.value = queue.value.indexOf(cur)
+    if (cur) currentIndex.value = queue.value.indexOf(cur)
   }
 
   // 7. 下一首

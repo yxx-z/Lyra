@@ -75,6 +75,7 @@
               :artist="track.artist"
               :album="track.album"
               :stream-url="track.stream_url"
+              :cover-url="'/api/v1/cover/' + track.album_id"
             />
           </div>
         </div>

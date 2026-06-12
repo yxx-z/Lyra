@@ -20,7 +20,7 @@
     <ul v-else class="queue-list">
       <li
         v-for="(item, i) in player.queue"
-        :key="i"
+        :key="item.trackId + '-' + i"
         class="queue-item"
         :class="{ current: i === player.currentIndex }"
         draggable="true"

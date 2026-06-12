@@ -115,7 +115,6 @@ import PlayNextButton from './PlayNextButton.vue'
 
 const props = defineProps<{ api: ApiClient }>()
 const emit = defineEmits<{
-  'play-track': [track: FavTrack]
   'play-list': [tracks: FavTrack[], startIndex: number]
 }>()
 

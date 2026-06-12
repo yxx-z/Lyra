@@ -160,7 +160,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'play-track': [track: FavTrack]
   'play-list': [tracks: FavTrack[], startIndex: number]
 }>()
 
