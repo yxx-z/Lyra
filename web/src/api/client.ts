@@ -126,6 +126,15 @@ export type LyricsPayload = {
   source?: string
 }
 
+export type LyricCandidate = {
+  trackName: string
+  artistName: string
+  albumName: string
+  duration: number
+  synced: boolean
+  lrc: string
+}
+
 export type ScrapeResponse = {
   track_id: string
   status: string
@@ -290,6 +299,20 @@ export class ApiClient {
     return this.request<ScrapeResponse>(`/api/v1/tracks/${encodeURIComponent(trackId)}/lyrics/upgrade`, {
       method: 'POST',
     })
+  }
+
+  searchLyrics(
+    trackId: string,
+    params: { trackName?: string; artistName?: string; albumName?: string },
+  ): Promise<{ candidates: LyricCandidate[] }> {
+    const qs = new URLSearchParams()
+    if (params.trackName) qs.set('trackName', params.trackName)
+    if (params.artistName) qs.set('artistName', params.artistName)
+    if (params.albumName) qs.set('albumName', params.albumName)
+    return this.request<{ candidates: LyricCandidate[] }>(
+      `/api/v1/tracks/${encodeURIComponent(trackId)}/lyrics/search?${qs.toString()}`,
+      { method: 'GET' },
+    )
   }
 
   scrapeAlbum(albumId: string) {

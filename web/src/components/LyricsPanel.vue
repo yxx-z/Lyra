@@ -77,6 +77,12 @@
             <span>{{ scraping ? '正在获取歌词…' : '🔍 获取歌词' }}</span>
           </button>
           <p v-if="scrapeMessage" class="muted" style="font-size: 12px; margin-top: 10px;">{{ scrapeMessage }}</p>
+          <button
+            class="link-btn"
+            style="margin-top: 10px; font-size: 13px;"
+            type="button"
+            @click="openManual"
+          >手动获取歌词</button>
         </div>
 
         <!-- C. 标准滚动歌词面板 -->
@@ -104,6 +110,32 @@
           >
             {{ line.text || '• • •' }}
           </button>
+          <!-- 底部手动搜索入口 -->
+          <div style="display: flex; justify-content: center; padding: 16px 0 8px;">
+            <button class="link-btn" type="button" @click="openManual">手动获取歌词</button>
+          </div>
+        </div>
+
+        <!-- D. 手动歌词搜索面板 -->
+        <div v-if="showManual" class="manual-lyrics">
+          <input class="custom-input" v-model="mTrack" placeholder="歌名" />
+          <input class="custom-input" v-model="mArtist" placeholder="歌手" />
+          <input class="custom-input" v-model="mAlbum" placeholder="专辑（可选）" />
+          <div class="manual-actions">
+            <button class="custom-btn-primary" type="button" :disabled="searching" @click="runManualSearch">
+              {{ searching ? '搜索中…' : '查询' }}
+            </button>
+            <button class="link-btn" type="button" @click="showManual = false">关闭</button>
+          </div>
+          <p v-if="manualMsg" class="muted" style="font-size: 12px;">{{ manualMsg }}</p>
+          <ul class="candidate-list">
+            <li v-for="(c, i) in candidates" :key="i">
+              <button class="candidate-row" type="button" @click="applyCandidate(c)">
+                <span class="cand-title">{{ c.trackName }} - {{ c.artistName }}</span>
+                <span class="cand-meta muted">{{ c.albumName }} · {{ fmtDur(c.duration) }} · {{ c.synced ? '同步' : '纯文本' }}</span>
+              </button>
+            </li>
+          </ul>
         </div>
       </div>
     </div>
@@ -113,7 +145,7 @@
 <script setup lang="ts">
 import { ref, watch, computed, nextTick } from 'vue'
 import { usePlayerStore } from '../stores/player'
-import { ApiError, type ApiClient } from '../api/client'
+import { ApiError, type ApiClient, type LyricCandidate } from '../api/client'
 
 // 约定 LRC 解析的单行歌词数据接口
 interface LyricLine {
@@ -149,6 +181,64 @@ const starred = ref(false)
 // 用户正在手动滚动歌词：期间暂停自动对焦，方便靠歌词找进度
 const userScrolling = ref(false)
 let userScrollTimer: ReturnType<typeof setTimeout> | null = null
+
+// ── 手动搜索歌词 ──────────────────────────────────────────
+const showManual = ref(false)
+const mTrack = ref('')
+const mArtist = ref('')
+const mAlbum = ref('')
+const searching = ref(false)
+const candidates = ref<LyricCandidate[]>([])
+const manualMsg = ref('')
+
+function openManual() {
+  const t = playerStore.currentTrack
+  mTrack.value = t?.title ?? ''
+  mArtist.value = t?.artist ?? ''
+  mAlbum.value = t?.album ?? ''
+  candidates.value = []
+  manualMsg.value = ''
+  showManual.value = true
+}
+
+async function runManualSearch() {
+  const track = playerStore.currentTrack
+  if (!track) return
+  searching.value = true
+  manualMsg.value = ''
+  candidates.value = []
+  try {
+    const res = await props.api.searchLyrics(track.trackId, {
+      trackName: mTrack.value,
+      artistName: mArtist.value,
+      albumName: mAlbum.value,
+    })
+    candidates.value = res.candidates
+    if (res.candidates.length === 0) manualMsg.value = '未找到，试试调整歌名/歌手'
+  } catch {
+    manualMsg.value = '搜索失败，请重试'
+  } finally {
+    searching.value = false
+  }
+}
+
+function fmtDur(s: number) {
+  const m = Math.floor(s / 60)
+  const r = String(s % 60).padStart(2, '0')
+  return `${m}:${r}`
+}
+
+async function applyCandidate(c: LyricCandidate) {
+  const track = playerStore.currentTrack
+  if (!track) return
+  try {
+    await props.api.saveLyrics(track.trackId, { lrc_content: c.lrc, source: 'manual' })
+    showManual.value = false
+    await loadLyrics()
+  } catch {
+    manualMsg.value = '应用失败，请重试'
+  }
+}
 
 // 标记用户手动滚动；4 秒内不自动把歌词拉回当前演唱句
 function markUserScroll() {
@@ -375,8 +465,10 @@ watch(() => playerStore.currentTime, () => {
   }
 })
 
-// 监视切歌与面板开启
+// 监视切歌与面板开启；切歌时关闭手动搜索面板
 watch(() => playerStore.currentTrack?.trackId, () => {
+  showManual.value = false
+  candidates.value = []
   if (props.isOpen) {
     void loadLyrics()
   }
@@ -425,5 +517,87 @@ watch(() => props.isOpen, (newVal) => {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* ── 手动歌词搜索面板 ────────────────────────────────────── */
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--accent, #a78bfa);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+}
+.link-btn:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.manual-lyrics {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 15, 25, 0.92);
+  backdrop-filter: blur(12px);
+  border-radius: 12px;
+  padding: 24px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 10;
+  overflow-y: auto;
+}
+
+.manual-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.candidate-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.candidate-row {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.candidate-row:hover {
+  background: rgba(167, 139, 250, 0.12);
+  border-color: rgba(167, 139, 250, 0.3);
+}
+
+.cand-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text, #e5e7eb);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cand-meta {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>
