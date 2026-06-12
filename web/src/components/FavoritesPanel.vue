@@ -75,6 +75,14 @@
             <span class="muted fav-track-meta">{{ track.artist }} · {{ track.album }}</span>
             <span class="muted fav-track-duration">{{ formatDuration(track.duration) }}</span>
             <AddToPlaylist :api="api" :track-id="track.id" />
+            <PlayNextButton
+              :track-id="track.id"
+              :title="track.title"
+              :artist="track.artist"
+              :album="track.album"
+              :stream-url="track.stream_url"
+              :cover-url="track.cover_url"
+            />
           </div>
         </div>
       </div>
@@ -96,6 +104,14 @@
             <span class="muted fav-track-meta">{{ track.artist }} · {{ track.album }}</span>
             <span class="muted fav-track-duration">{{ formatDuration(track.duration) }}</span>
             <AddToPlaylist :api="api" :track-id="track.id" />
+            <PlayNextButton
+              :track-id="track.id"
+              :title="track.title"
+              :artist="track.artist"
+              :album="track.album"
+              :stream-url="track.stream_url"
+              :cover-url="track.cover_url"
+            />
           </div>
         </div>
       </div>
@@ -118,6 +134,14 @@
             <span class="muted fav-track-meta">{{ track.artist }} · {{ track.album }}</span>
             <span class="muted fav-track-duration">{{ formatDuration(track.duration) }}</span>
             <AddToPlaylist :api="api" :track-id="track.id" />
+            <PlayNextButton
+              :track-id="track.id"
+              :title="track.title"
+              :artist="track.artist"
+              :album="track.album"
+              :stream-url="track.stream_url"
+              :cover-url="track.cover_url"
+            />
           </div>
         </div>
       </div>
@@ -129,6 +153,7 @@
 import { ref, onMounted } from 'vue'
 import type { ApiClient, FavTrack, FavAlbum } from '../api/client'
 import AddToPlaylist from './AddToPlaylist.vue'
+import PlayNextButton from './PlayNextButton.vue'
 
 const props = defineProps<{
   api: ApiClient

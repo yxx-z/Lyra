@@ -60,7 +60,7 @@
             <span class="muted" style="font-size: 13px; margin-left: 16px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px;">
               {{ track.artist }} &middot; {{ track.album }}
             </span>
-            <!-- 曲目红心 + 添加到歌单 -->
+            <!-- 曲目红心 + 添加到歌单 + 下一首播放 -->
             <button
               class="heart-btn"
               :class="{ starred: track.starred }"
@@ -69,6 +69,13 @@
               @click.stop="toggleTrackStar(track)"
             >{{ track.starred ? '♥' : '♡' }}</button>
             <AddToPlaylist :api="api" :track-id="track.id" />
+            <PlayNextButton
+              :track-id="track.id"
+              :title="track.title"
+              :artist="track.artist"
+              :album="track.album"
+              :stream-url="track.stream_url"
+            />
           </div>
         </div>
       </div>
@@ -140,6 +147,7 @@
 import { computed, ref, watch } from 'vue'
 import type { ApiClient, SearchResponse, TrackResult, AlbumResult } from '../api/client'
 import AddToPlaylist from './AddToPlaylist.vue'
+import PlayNextButton from './PlayNextButton.vue'
 
 const props = defineProps<{
   query: string

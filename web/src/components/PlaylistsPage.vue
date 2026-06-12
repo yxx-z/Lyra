@@ -84,6 +84,14 @@
               <span class="pl-drag-handle muted" title="拖拽重排">⠿</span>
               <span class="pl-track-title">{{ t.title }}</span>
               <span class="muted pl-track-meta">{{ t.artist }} · {{ t.album }}</span>
+              <PlayNextButton
+                :track-id="t.id"
+                :title="t.title"
+                :artist="t.artist"
+                :album="t.album"
+                :stream-url="t.stream_url"
+                :cover-url="t.cover_url"
+              />
               <button
                 class="pl-icon-btn pl-icon-btn-danger pl-track-remove"
                 type="button"
@@ -103,6 +111,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import type { ApiClient, FavTrack, PlaylistSummary, PlaylistDetail } from '../api/client'
+import PlayNextButton from './PlayNextButton.vue'
 
 const props = defineProps<{ api: ApiClient }>()
 const emit = defineEmits<{

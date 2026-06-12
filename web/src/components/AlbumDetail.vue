@@ -117,7 +117,7 @@
             </span>
           </div>
 
-          <!-- 右侧操作区：红心 + 添加到歌单 + 时长 -->
+          <!-- 右侧操作区：红心 + 添加到歌单 + 下一首播放 + 时长 -->
           <div class="track-actions">
             <button
               class="heart-btn"
@@ -127,6 +127,14 @@
               @click.stop="toggleTrackStar(track)"
             >{{ track.starred ? '♥' : '♡' }}</button>
             <AddToPlaylist :api="api" :track-id="track.id" />
+            <PlayNextButton
+              :track-id="track.id"
+              :title="track.title"
+              :artist="album?.artist"
+              :album="album?.title"
+              :stream-url="track.stream_url"
+              :cover-url="album?.cover_url"
+            />
             <span class="track-duration">{{ formatDuration(track.duration) }}</span>
           </div>
         </div>
@@ -140,6 +148,7 @@ import { ref, computed, watch } from 'vue'
 import { usePlayerStore } from '../stores/player'
 import { ApiError, type ApiClient, type AlbumDetail, type TrackSummary } from '../api/client'
 import AddToPlaylist from './AddToPlaylist.vue'
+import PlayNextButton from './PlayNextButton.vue'
 
 const props = defineProps<{
   album: AlbumDetail | null
