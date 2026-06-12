@@ -3,6 +3,7 @@ package v1
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/yxx-z/lyra/internal/lyrics"
 )
@@ -32,7 +33,7 @@ func (h *LyricsSearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	trackName := q.Get("trackName")
 	artistName := q.Get("artistName")
 	albumName := q.Get("albumName")
-	if trackName == "" && artistName == "" {
+	if strings.TrimSpace(trackName) == "" && strings.TrimSpace(artistName) == "" {
 		writeJSONError(w, http.StatusBadRequest, "请至少提供歌名或歌手")
 		return
 	}
