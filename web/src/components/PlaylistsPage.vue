@@ -60,6 +60,26 @@
       <!-- 右栏：歌单详情 -->
       <div class="pl-right">
         <template v-if="selected">
+          <div class="pl-detail-cover-row">
+            <img
+              class="pl-detail-cover"
+              :key="selected.id + '-' + coverBust"
+              :src="coverSrc(selected)"
+              alt="歌单封面"
+              @error="onCoverError"
+            />
+            <div class="pl-cover-actions">
+              <input
+                ref="coverInput"
+                type="file"
+                accept="image/jpeg,image/png"
+                style="display: none"
+                @change="onCoverPicked"
+              />
+              <button class="pl-icon-btn" type="button" title="上传封面" @click="pickCover">上传封面</button>
+              <button class="pl-icon-btn" type="button" title="恢复自动封面" @click="restoreCover">恢复自动封面</button>
+            </div>
+          </div>
           <div class="pl-detail-header">
             <span class="pl-detail-name">{{ selected.name }}</span>
             <span class="muted pl-detail-count">{{ selected.tracks.length }} 首</span>
@@ -185,6 +205,50 @@ async function onDrop(target: number) {
   const cur = selected.value.id
   try { await props.api.setPlaylistTracks(cur, arr.map(t => t.id)) }
   catch (e) { show(errMsg(e), true); await open(cur) }
+}
+
+// 封面上传 / 恢复
+const coverInput = ref<HTMLInputElement | null>(null)
+const coverBust = ref(0)
+
+// 封面 URL：上传/恢复后用 bust 参数破浏览器缓存
+function coverSrc(pl: PlaylistDetail): string {
+  const base = pl.cover_url || `/api/v1/playlists/${pl.id}/cover`
+  return coverBust.value ? `${base}?t=${coverBust.value}` : base
+}
+
+// 自动封面 404（空歌单且无自定义图）时隐藏破图
+function onCoverError(e: Event) {
+  ;(e.target as HTMLImageElement).style.visibility = 'hidden'
+}
+
+function pickCover() {
+  coverInput.value?.click()
+}
+
+async function onCoverPicked(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !selected.value) return
+  try {
+    await props.api.uploadPlaylistCover(selected.value.id, file)
+    coverBust.value = Date.now()
+    show('封面已更新', false)
+  } catch (err) {
+    show(errMsg(err), true)
+  }
+}
+
+async function restoreCover() {
+  if (!selected.value) return
+  try {
+    await props.api.deletePlaylistCover(selected.value.id)
+    coverBust.value = Date.now()
+    show('已恢复自动封面', false)
+  } catch (err) {
+    show(errMsg(err), true)
+  }
 }
 </script>
 
@@ -461,5 +525,32 @@ async function onDrop(target: number) {
 .pl-empty-hint {
   padding: 32px 0;
   text-align: center;
+}
+
+.pl-detail-cover-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.pl-detail-cover {
+  width: 96px;
+  height: 96px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-glass, rgba(255, 255, 255, 0.08));
+  flex-shrink: 0;
+}
+.pl-cover-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pl-cover-actions .pl-icon-btn {
+  width: auto;
+  height: auto;
+  padding: 5px 10px;
+  font-size: 12px;
 }
 </style>

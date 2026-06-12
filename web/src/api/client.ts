@@ -150,7 +150,7 @@ export type AlbumScrapeResponse = {
 }
 
 // ── 歌单类型 ──────────────────────────────────────────────
-export type PlaylistSummary = { id: string; name: string; comment: string; song_count: number; duration: number; created: string; changed: string }
+export type PlaylistSummary = { id: string; name: string; comment: string; song_count: number; duration: number; created: string; changed: string; cover_url: string }
 export type PlaylistDetail = PlaylistSummary & { tracks: FavTrack[] }
 
 export type AdminUser = {
@@ -471,6 +471,21 @@ export class ApiClient {
       method: 'PUT',
       body: JSON.stringify({ trackIds }),
       headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  uploadPlaylistCover(id: string, file: File): Promise<void> {
+    const fd = new FormData()
+    fd.append('cover', file)
+    return this.request<void>(`/api/v1/playlists/${encodeURIComponent(id)}/cover`, {
+      method: 'PUT',
+      body: fd,
+    })
+  }
+
+  deletePlaylistCover(id: string): Promise<void> {
+    return this.request<void>(`/api/v1/playlists/${encodeURIComponent(id)}/cover`, {
+      method: 'DELETE',
     })
   }
 
