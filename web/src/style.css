@@ -676,6 +676,13 @@ button {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-dim);
+  flex-shrink: 0;
+  min-width: 1.75rem;
+  margin-right: 14px;
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .track-title {
   font-size: 14px;
