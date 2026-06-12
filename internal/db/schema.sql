@@ -64,6 +64,7 @@ CREATE TABLE playlists (
     user_id    TEXT REFERENCES users(id) ON DELETE CASCADE,
     name       TEXT NOT NULL,
     comment    TEXT NOT NULL DEFAULT '',
+    cover_path TEXT NOT NULL DEFAULT '',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

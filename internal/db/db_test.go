@@ -183,3 +183,22 @@ func TestOpen_PlaylistsHaveUserIDAndCascade(t *testing.T) {
 		t.Errorf("删歌单应级联清曲目，剩 %d", n)
 	}
 }
+
+func TestOpen_PlaylistsHaveCoverPath(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer db.Close()
+	db.Exec(`INSERT INTO users(id,username,password_hash) VALUES('u1','u1','h')`)
+	if _, err := db.Exec(`INSERT INTO playlists(id,user_id,name,cover_path) VALUES('p1','u1','歌单','/x/y.jpg')`); err != nil {
+		t.Fatalf("playlists 应有 cover_path 列: %v", err)
+	}
+	var cp string
+	if err := db.QueryRow(`SELECT cover_path FROM playlists WHERE id='p1'`).Scan(&cp); err != nil {
+		t.Fatalf("读 cover_path: %v", err)
+	}
+	if cp != "/x/y.jpg" {
+		t.Errorf("cover_path = %q, 期望 /x/y.jpg", cp)
+	}
+}
