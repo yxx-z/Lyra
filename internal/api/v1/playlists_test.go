@@ -95,3 +95,17 @@ func TestV1Playlist_NotFound404(t *testing.T) {
 		t.Errorf("不存在歌单应 404: %d", w.Code)
 	}
 }
+
+func TestV1Playlist_ListAndDetailHaveCoverURL(t *testing.T) {
+	r, u, pl, token := plFixture(t)
+	_, _ = pl.Create(u.ID, "封面单")
+	listBody := plDo(t, r, token, "GET", "/playlists", "").Body.String()
+	if !strings.Contains(listBody, `"cover_url"`) {
+		t.Errorf("列表应含 cover_url: %s", listBody)
+	}
+	list, _ := pl.List(u.ID)
+	detailBody := plDo(t, r, token, "GET", "/playlists/"+list[0].ID, "").Body.String()
+	if !strings.Contains(detailBody, `/api/v1/playlists/`+list[0].ID+`/cover`) {
+		t.Errorf("详情 cover_url 应指向该歌单封面端点: %s", detailBody)
+	}
+}

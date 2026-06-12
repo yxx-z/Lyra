@@ -29,6 +29,7 @@ type playlistSummary struct {
 	Duration  int    `json:"duration"`
 	Created   string `json:"created"`
 	Changed   string `json:"changed"`
+	CoverURL  string `json:"cover_url"`
 }
 
 func toSummary(p playlists.Playlist) playlistSummary {
@@ -36,6 +37,7 @@ func toSummary(p playlists.Playlist) playlistSummary {
 		ID: p.ID, Name: p.Name, Comment: p.Comment,
 		SongCount: p.SongCount, Duration: p.Duration,
 		Created: p.Created, Changed: p.Changed,
+		CoverURL: "/api/v1/playlists/" + p.ID + "/cover",
 	}
 }
 
@@ -114,7 +116,8 @@ func (h *PlaylistHandler) Get(w http.ResponseWriter, r *http.Request) {
 		"id": sum.ID, "name": sum.Name, "comment": sum.Comment,
 		"song_count": sum.SongCount, "duration": sum.Duration,
 		"created": sum.Created, "changed": sum.Changed,
-		"tracks": tracksByIDs(h.db, ids),
+		"cover_url": sum.CoverURL,
+		"tracks":    tracksByIDs(h.db, ids),
 	})
 }
 
