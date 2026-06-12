@@ -155,7 +155,28 @@
     </div>
 
     <!-- 3. 右侧：拟物音量控制与附加功能 -->
-    <div class="player-utilities">
+    <div class="player-utilities" style="position: relative;">
+      <!-- 播放队列面板 -->
+      <QueuePanel v-if="showQueue" @close="showQueue = false" />
+
+      <!-- 播放队列入口按钮 -->
+      <button
+        :class="{ active: showQueue }"
+        class="player-btn"
+        title="播放队列"
+        type="button"
+        @click="showQueue = !showQueue"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6" />
+          <line x1="8" y1="12" x2="21" y2="12" />
+          <line x1="8" y1="18" x2="21" y2="18" />
+          <polyline points="3 6 4 7 6 5" />
+          <polyline points="3 12 4 13 6 11" />
+          <polyline points="3 18 4 19 6 17" />
+        </svg>
+      </button>
+
       <div class="volume-control-wrapper">
         <!-- 音量静音喇叭按钮 (动态展示三态图) -->
         <button
@@ -218,6 +239,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { usePlayerStore } from '../stores/player'
+import QueuePanel from './QueuePanel.vue'
 
 defineProps<{
   isLyricsOpen: boolean
@@ -229,6 +251,7 @@ defineEmits<{
 
 const player = usePlayerStore()
 const coverBroken = ref(false)
+const showQueue = ref(false)
 
 const subtitle = computed(() => {
   if (!player.currentTrack) return '选择曲目以开始聆听'
