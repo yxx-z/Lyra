@@ -107,14 +107,14 @@
       <FavoritesPanel
         v-else-if="mode === 'favorites'"
         :api="api"
-        @play-track="onFavPlay"
+        @play-list="onPlayList"
       />
 
       <!-- 模块 F: 歌单页（列表/新建/详情/改名/删除/移除/拖拽重排） -->
       <PlaylistsPage
         v-else-if="mode === 'playlists'"
         :api="api"
-        @play-track="onFavPlay"
+        @play-list="onPlayList"
       />
 
       <!-- 模块 E: 设置页（账户设置 + 用户管理） -->
@@ -568,17 +568,19 @@ function playSearchTrack(track: TrackResult) {
   playerStore.playTrack(activeTrack, queue)
 }
 
-// 收藏夹曲目开播
-function onFavPlay(track: FavTrack) {
-  const item = {
-    trackId: track.id,
-    title: track.title,
-    artist: track.artist,
-    album: track.album,
-    streamUrl: track.stream_url,
-    coverUrl: track.cover_url,
-  }
-  playerStore.playTrack(item, [item])
+// 歌单 / 收藏夹列表连播（点某首从该位置起播整列）
+function onPlayList(tracks: FavTrack[], startIndex: number) {
+  if (!tracks.length) return
+  const queue = tracks.map((t) => ({
+    trackId: t.id,
+    title: t.title,
+    artist: t.artist,
+    album: t.album,
+    streamUrl: t.stream_url,
+    coverUrl: t.cover_url,
+  }))
+  const start = startIndex >= 0 && startIndex < queue.length ? startIndex : 0
+  playerStore.playTrack(queue[start], queue)
 }
 
 // 播放 scrobble：当前曲目 id 变更时上报一次

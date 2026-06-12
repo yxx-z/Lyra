@@ -63,6 +63,7 @@
           <div class="pl-detail-header">
             <span class="pl-detail-name">{{ selected.name }}</span>
             <span class="muted pl-detail-count">{{ selected.tracks.length }} 首</span>
+            <button class="custom-btn-primary" v-if="selected && selected.tracks.length" type="button" @click="$emit('play-list', selected.tracks, 0)">▶ 全部播放</button>
           </div>
 
           <div v-if="selected.tracks.length === 0" class="muted pl-empty">此歌单暂无曲目</div>
@@ -78,7 +79,7 @@
               @dragover.prevent="dragOverIdx = i"
               @dragleave="dragOverIdx = null"
               @drop="onDrop(i)"
-              @click="$emit('play-track', t)"
+              @click="$emit('play-list', selected!.tracks, i)"
             >
               <span class="pl-drag-handle muted" title="拖拽重排">⠿</span>
               <span class="pl-track-title">{{ t.title }}</span>
@@ -104,7 +105,10 @@ import { onMounted, ref } from 'vue'
 import type { ApiClient, FavTrack, PlaylistSummary, PlaylistDetail } from '../api/client'
 
 const props = defineProps<{ api: ApiClient }>()
-const emit = defineEmits<{ 'play-track': [track: FavTrack] }>()
+const emit = defineEmits<{
+  'play-track': [track: FavTrack]
+  'play-list': [tracks: FavTrack[], startIndex: number]
+}>()
 
 const lists = ref<PlaylistSummary[]>([])
 const selected = ref<PlaylistDetail | null>(null)

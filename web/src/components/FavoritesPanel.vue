@@ -65,12 +65,13 @@
         <div v-if="favTracks.length === 0" class="muted" style="font-size: 13px;">暂无收藏的歌曲</div>
         <!-- 使用 div 包装行，避免 button 嵌套（行内含 AddToPlaylist 等交互按钮） -->
         <div v-else class="fav-track-list">
+          <button class="custom-btn-primary" v-if="favTracks.length" type="button" @click="$emit('play-list', favTracks, 0)">▶ 全部播放</button>
           <div
-            v-for="track in favTracks"
+            v-for="(track, i) in favTracks"
             :key="track.id"
             class="fav-track-row"
           >
-            <span class="fav-track-title fav-play-area" :title="track.title" role="button" tabindex="0" @click="$emit('play-track', track)" @keydown.enter="$emit('play-track', track)" @keydown.space.prevent="$emit('play-track', track)">{{ track.title }}</span>
+            <span class="fav-track-title fav-play-area" :title="track.title" role="button" tabindex="0" @click="$emit('play-list', favTracks, i)" @keydown.enter="$emit('play-list', favTracks, i)" @keydown.space.prevent="$emit('play-list', favTracks, i)">{{ track.title }}</span>
             <span class="muted fav-track-meta">{{ track.artist }} · {{ track.album }}</span>
             <span class="muted fav-track-duration">{{ formatDuration(track.duration) }}</span>
             <AddToPlaylist :api="api" :track-id="track.id" />
@@ -85,12 +86,13 @@
         <h3 class="settings-section-title">最近播放</h3>
         <div v-if="recentTracks.length === 0" class="muted" style="font-size: 13px;">暂无播放记录</div>
         <div v-else class="fav-track-list">
+          <button class="custom-btn-primary" v-if="recentTracks.length" type="button" @click="$emit('play-list', recentTracks, 0)">▶ 全部播放</button>
           <div
-            v-for="track in recentTracks"
+            v-for="(track, i) in recentTracks"
             :key="track.id"
             class="fav-track-row"
           >
-            <span class="fav-track-title fav-play-area" :title="track.title" role="button" tabindex="0" @click="$emit('play-track', track)" @keydown.enter="$emit('play-track', track)" @keydown.space.prevent="$emit('play-track', track)">{{ track.title }}</span>
+            <span class="fav-track-title fav-play-area" :title="track.title" role="button" tabindex="0" @click="$emit('play-list', recentTracks, i)" @keydown.enter="$emit('play-list', recentTracks, i)" @keydown.space.prevent="$emit('play-list', recentTracks, i)">{{ track.title }}</span>
             <span class="muted fav-track-meta">{{ track.artist }} · {{ track.album }}</span>
             <span class="muted fav-track-duration">{{ formatDuration(track.duration) }}</span>
             <AddToPlaylist :api="api" :track-id="track.id" />
@@ -105,13 +107,14 @@
         <h3 class="settings-section-title">最常听</h3>
         <div v-if="topTracks.length === 0" class="muted" style="font-size: 13px;">暂无播放记录</div>
         <div v-else class="fav-track-list">
+          <button class="custom-btn-primary" v-if="topTracks.length" type="button" @click="$emit('play-list', topTracks, 0)">▶ 全部播放</button>
           <div
             v-for="(track, idx) in topTracks"
             :key="track.id"
             class="fav-track-row"
           >
             <span class="fav-track-rank muted">{{ idx + 1 }}</span>
-            <span class="fav-track-title fav-play-area" :title="track.title" role="button" tabindex="0" @click="$emit('play-track', track)" @keydown.enter="$emit('play-track', track)" @keydown.space.prevent="$emit('play-track', track)">{{ track.title }}</span>
+            <span class="fav-track-title fav-play-area" :title="track.title" role="button" tabindex="0" @click="$emit('play-list', topTracks, idx)" @keydown.enter="$emit('play-list', topTracks, idx)" @keydown.space.prevent="$emit('play-list', topTracks, idx)">{{ track.title }}</span>
             <span class="muted fav-track-meta">{{ track.artist }} · {{ track.album }}</span>
             <span class="muted fav-track-duration">{{ formatDuration(track.duration) }}</span>
             <AddToPlaylist :api="api" :track-id="track.id" />
@@ -133,6 +136,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'play-track': [track: FavTrack]
+  'play-list': [tracks: FavTrack[], startIndex: number]
 }>()
 
 type TabKey = 'favorites' | 'recent' | 'top'
