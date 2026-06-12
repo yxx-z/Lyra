@@ -67,7 +67,7 @@ func (h *PlaylistCoverHandler) Get(w http.ResponseWriter, r *http.Request) {
 	var albumID sql.NullString
 	err := h.db.QueryRow(
 		`SELECT t.album_id FROM playlist_tracks pt JOIN tracks t ON t.id=pt.track_id
-		 WHERE pt.playlist_id=? ORDER BY pt.position LIMIT 1`, id,
+		 WHERE pt.playlist_id=? AND t.is_available=1 ORDER BY pt.position LIMIT 1`, id,
 	).Scan(&albumID)
 	if err != nil || !albumID.Valid || albumID.String == "" {
 		http.NotFound(w, r)
