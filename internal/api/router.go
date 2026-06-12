@@ -107,14 +107,17 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 		r.Put("/tracks/{id}/lyrics", lyrics.PutLyrics)
 		r.Delete("/tracks/{id}/lyrics", lyrics.DeleteLyrics)
 
+		lrclib := lyricspkg.NewLRCLIBClient("https://lrclib.net", cfg.Scraper.MusicBrainz.UserAgent, nil)
 		lyricsService := lyricspkg.NewLyricsService(
 			db,
 			lyricspkg.NewEmbeddedProvider(),
-			lyricspkg.NewLRCLIBClient("https://lrclib.net", cfg.Scraper.MusicBrainz.UserAgent, nil),
+			lrclib,
 		)
 		scrape := v1.NewScrapeHandler(lyricsService)
 		r.Post("/tracks/{id}/scrape", scrape.ScrapeTrack)
 		r.Post("/tracks/{id}/lyrics/upgrade", scrape.UpgradeLyrics)
+		lyricsSearch := v1.NewLyricsSearchHandler(lrclib)
+		r.Get("/tracks/{id}/lyrics/search", lyricsSearch.Search)
 
 		metadataService := metadatapkg.NewMetadataService(
 			db,
