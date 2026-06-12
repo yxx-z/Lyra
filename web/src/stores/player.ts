@@ -154,7 +154,32 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
-  // 4. 下一首
+  // 4. 下一首播放：插到当前曲之后（不打断当前）；队列空则直接开播。
+  function playNext(item: ExtendedPlayerTrack) {
+    if (queue.value.length === 0) {
+      playTrack(item, [item])
+      return
+    }
+    queue.value.splice(currentIndex.value + 1, 0, item)
+  }
+
+  // 5. 从队列移除某项（不对当前曲提供移除）。保持 currentTrack 指向不变。
+  function removeFromQueue(index: number) {
+    if (index < 0 || index >= queue.value.length || index === currentIndex.value) return
+    queue.value.splice(index, 1)
+    if (index < currentIndex.value) currentIndex.value--
+  }
+
+  // 6. 队列内拖拽重排：用对象引用重定位 currentIndex，保证正在播的曲不被打断。
+  function moveInQueue(from: number, to: number) {
+    if (from < 0 || from >= queue.value.length || to < 0 || to >= queue.value.length || from === to) return
+    const cur = queue.value[currentIndex.value]
+    const [moved] = queue.value.splice(from, 1)
+    queue.value.splice(to, 0, moved)
+    currentIndex.value = queue.value.indexOf(cur)
+  }
+
+  // 7. 下一首
   function next() {
     if (queue.value.length === 0) return
 
@@ -263,6 +288,9 @@ export const usePlayerStore = defineStore('player', () => {
     playTrack,
     togglePlay,
     playAtIndex,
+    playNext,
+    removeFromQueue,
+    moveInQueue,
     next,
     prev,
     seek,
