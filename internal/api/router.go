@@ -146,6 +146,11 @@ func NewRouter(s *scanner.Scanner, db *sql.DB, cfg *config.Config) http.Handler 
 		r.Delete("/playlists/{id}", plH.Delete)
 		r.Post("/playlists/{id}/tracks", plH.AddTracks)
 		r.Put("/playlists/{id}/tracks", plH.ReplaceTracks)
+
+		plCover := v1.NewPlaylistCoverHandler(db, cfg.Cache.ArtworkDir, cover)
+		r.Get("/playlists/{id}/cover", plCover.Get)
+		r.Put("/playlists/{id}/cover", plCover.Put)
+		r.Delete("/playlists/{id}/cover", plCover.Delete)
 	})
 
 	subCover := v1.NewCoverHandler(db)
