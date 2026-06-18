@@ -172,6 +172,7 @@ export class ApiError extends Error {
 
 export class ApiClient {
   private token: string | null
+  private onUnauthorized: (() => void) | null = null
 
   constructor(token: string | null) {
     this.token = token
@@ -179,6 +180,12 @@ export class ApiClient {
 
   setToken(token: string | null) {
     this.token = token
+  }
+
+  // 注册全局未授权回调：任何带 token 的请求收到 401（会话失效）时触发，
+  // 由上层统一登出并跳转登录页 —— 避免依赖每个组件各自的 catch 处理。
+  setUnauthorizedHandler(fn: (() => void) | null) {
+    this.onUnauthorized = fn
   }
 
   getToken() {
@@ -519,6 +526,11 @@ export class ApiClient {
     })
 
     if (!response.ok) {
+      // 带 token 的请求收到 401 = 会话已失效，统一通知上层登出并跳转登录页。
+      // login/setup 等用 auth:false，不会误触发。
+      if (response.status === 401 && options.auth !== false && this.token) {
+        this.onUnauthorized?.()
+      }
       let message = response.statusText
       try {
         const body = (await response.json()) as { error?: string }

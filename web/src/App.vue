@@ -187,6 +187,14 @@ const playerStore = usePlayerStore()
 const token = ref(tokenStorage.load())
 const anonymousAccess = ref(false)
 const api = new ApiClient(token.value)
+
+// 会话失效兜底：任意带 token 的请求返回 401 时统一登出并跳转登录页，
+// 不再依赖各组件 catch 各自处理（此前在歌单/收藏/设置等页鉴权掉了不会跳登录）。
+api.setUnauthorizedHandler(() => {
+  if (!token.value) return
+  void logout()
+  loginError.value = '登录会话已过期，请重新登录。'
+})
 const mode = ref<ViewMode>('albums')
 const loginLoading = ref(false)
 const loginError = ref('')
@@ -593,7 +601,11 @@ watch(
   },
 )
 
+let loggingOut = false
+
 async function logout() {
+  if (loggingOut) return // 重入守卫：登出请求自身若 401 会再次触发 onUnauthorized，避免递归/重复登出
+  loggingOut = true
   try {
     await api.logout()
   } catch {
@@ -610,6 +622,7 @@ async function logout() {
   mode.value = 'albums' // 登出后回到默认视图
   showRegister.value = false
   playerStore.$reset() // 清空全局播放状态
+  loggingOut = false
 }
 
 function handleApiError(error: unknown) {
